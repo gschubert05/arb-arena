@@ -159,6 +159,12 @@ jobs:
               # nothing new; no notification
               pass
           PY
+      - name: Place seen_keys.json where we commit it from
+        run: |
+          mkdir -p server/data
+          # if the previous step didn’t produce it (shouldn’t happen), create an empty set
+          test -f seen_keys.json || echo "[]" > seen_keys.json
+          mv -f seen_keys.json server/data/seen_keys.json
 
       # Publish both the JSON and the updated seen_keys.json to data branch
       - name: Publish JSON + seen_keys to data branch
