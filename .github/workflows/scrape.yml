@@ -19,14 +19,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Google Chrome (for Selenium)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gpg
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-signing-keyring.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] http://dl.google.com/linux/chrome/deb stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+      # Install Chrome for Testing (+ dependencies) and matching ChromeDriver
+      - id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+          install-chromedriver: true
+      
+      # Make the chrome binary available to your Python code if you read CHROME_BIN
+      - name: Export CHROME_BIN
+        run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+
 
       - name: Install Python deps
         run: |
