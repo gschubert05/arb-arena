@@ -130,7 +130,7 @@ jobs:
                   url   = it.get("url") or ""
                   line_txt = f"{sport} • {game}\n{market} — {line}\nROI: {roi_pct}\n{url}"
                   lines.append(line_txt)
-              msg = "🔥 New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(lines)
+              msg = "New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(lines)
               # write to file for curl
               with open("msg.txt","w",encoding="utf-8") as f: f.write(msg)
 
