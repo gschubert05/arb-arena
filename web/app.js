@@ -1,12 +1,9 @@
+// --- Dark mode boot + toggle (persist) ---
 (() => {
   const root = document.documentElement;
-  const saved = localStorage.getItem('theme'); // 'dark' | 'light' | null
-  if (saved) {
-    root.classList.toggle('dark', saved === 'dark');
-  } else {
-    // Default to dark on first visit
-    root.classList.add('dark');
-  }
+  const saved = localStorage.getItem('theme'); // 'dark' | 'light'
+  if (saved) root.classList.toggle('dark', saved === 'dark');
+  else root.classList.add('dark');
 
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#themeToggle');
@@ -29,24 +26,21 @@
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
   }
-
   const close = () => {
     modal.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
   };
-
   closeBtn?.addEventListener('click', () => {
     if (dontShow?.checked) localStorage.setItem('introDismissed', '1');
     close();
   });
-
   overlay?.addEventListener('click', close);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
   });
 })();
 
-
+// --- App state ---
 const state = {
   sortBy: 'roi',
   sortDir: 'desc',
@@ -71,9 +65,10 @@ const els = {
   minRoi: document.getElementById('minRoi'),
   minRoiValue: document.getElementById('minRoiValue'),
   reset: document.getElementById('resetFilters'),
-  refresh: document.getElementById('refresh')
+  refresh: document.getElementById('refresh'),
 };
 
+// --- Utility: build querystring from state ---
 function qs(params) {
   const usp = new URLSearchParams({
     page: state.page,
@@ -114,7 +109,7 @@ function renderSortIndicators() {
   });
 }
 
-
+// --- Fetch + render ---
 async function fetchData() {
   const res = await fetch(`/api/opportunities?${qs()}`);
   const { items, total, page, pages, lastUpdated, sports, competitionIds } = await res.json();
@@ -127,7 +122,7 @@ async function fetchData() {
   els.prev.disabled = page <= 1;
   els.next.disabled = page >= pages;
 
-  // populate filter dropdowns once
+  // populate dropdowns once
   if (els.sport.options.length === 1) {
     sports.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; els.sport.appendChild(o); });
   }
@@ -137,42 +132,44 @@ async function fetchData() {
 
   // rows
   els.tbody.innerHTML = '';
-  const fragment = document.createDocumentFragment();
+  const frag = document.createDocumentFragment();
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50';
-    const roiPct = (it.roi * 100).toFixed(2) + '%';
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors';
 
-    // Copy button
+    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const copyBtn = `<button class="px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" data-copy="${it.search_phrase}">Copy</button>`;
 
     tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap">${it.date}</td>
-      <td class="px-4 py-3 whitespace-nowrap">${it.sport}</td>
-      <td class="px-4 py-3">${it.game}</td>
-      <td class="px-4 py-3">${it.market}</td>
-      <td class="px-4 py-3">${it.match}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${it.date || it.dateISO || ''}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
+      <td class="px-4 py-3">${it.game || ''}</td>
+      <td class="px-4 py-3">${it.market || ''}</td>
+      <td class="px-4 py-3">${it.match || ''}</td>
       <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
       <td class="px-4 py-3 text-right">
-        <span class="mr-2">${it.search_phrase}</span>
+        <span class="mr-2">${it.search_phrase || ''}</span>
         ${copyBtn}
       </td>
       <td class="px-4 py-3">
-        <a href="${it.url}" target="_blank" rel="noopener" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Go</a>
-      </td>`;
-    renderSortIndicators();
-    fragment.appendChild(tr);
+        <a href="${it.url}" target="_blank" rel="noopener" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-blue-700">Go</a>
+      </td>
+    `;
+    frag.appendChild(tr);
   }
-  els.tbody.appendChild(fragment);
+  els.tbody.appendChild(frag);
+
+  // update sort arrows
+  renderSortIndicators();
 }
 
 function updateAndFetch(patch = {}) {
   Object.assign(state, patch);
-  state.page = 1; // reset page on filter/sort change
+  state.page = 1;
   fetchData();
 }
 
-// Events
+// events
 ['sport','competitionId','dateFrom','dateTo'].forEach(id => {
   els[id].addEventListener('change', () => {
     state.filters[id === 'competitionId' ? 'competitionId' : id] = els[id].value;
@@ -205,7 +202,7 @@ els.reset.addEventListener('click', () => {
 
 els.refresh.addEventListener('click', fetchData);
 
-// Sorting by clicking header
+// header sorting
 for (const th of document.querySelectorAll('thead [data-sort]')) {
   th.addEventListener('click', () => {
     const key = th.getAttribute('data-sort');
@@ -215,7 +212,7 @@ for (const th of document.querySelectorAll('thead [data-sort]')) {
   });
 }
 
-// Delegate copy buttons
+// delegate copy buttons
 addEventListener('click', (e) => {
   const btn = e.target.closest('[data-copy]');
   if (!btn) return;
@@ -226,5 +223,5 @@ addEventListener('click', (e) => {
   });
 });
 
-// Init
+// init
 fetchData();
