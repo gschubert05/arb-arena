@@ -44,7 +44,9 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          git fetch origin
           git checkout -B data
-          git add server/data/opportunities.json
+          git add -f server/data/opportunities.json   # <-- force add despite .gitignore
           git commit -m "data: update $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data --force
+
