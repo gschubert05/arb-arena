@@ -35,7 +35,7 @@ jobs:
 
       - name: Run scraper
         env:
-          COMP_IDS: "1-150"
+          COMP_IDS: "10,11,40"
         run: |
           export CHROME_BIN=/usr/bin/google-chrome
           python scraper/scraper.py
