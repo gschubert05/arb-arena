@@ -1,16 +1,32 @@
-name: Scrape opportunities
+name: Scrape (FAST + notify)
 
 on:
   schedule:
-    - cron: "2-59/5 * * * *"   # every 10 minutes (UTC)
+    - cron: "2-59/5 * * * *"   # every 5 minutes, starting at :02 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: scrape-arena
+  cancel-in-progress: true
+
+env:
+  # set your ROI threshold (percent). Example: 2.0 means alert when roi >= 2%
+  ROI_THRESHOLD_PCT: "2.0"
+  # path we publish on the data branch
+  PUBLISH_JSON_PATH: "server/data/opportunities.json"
+  # where we persist seen keys on the data branch
+  SEEN_KEYS_PATH: "server/data/seen_keys.json"
+  # raw URLs to read previous state
+  RAW_JSON_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/opportunities.json"
+  RAW_SEEN_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/seen_keys.json"
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -19,38 +35,140 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Install Chrome for Testing (+ dependencies) and matching ChromeDriver
+      # Chrome for Testing + matching ChromeDriver (no apt flakiness)
       - id: setup-chrome
         uses: browser-actions/setup-chrome@v2
         with:
           chrome-version: stable
           install-dependencies: true
           install-chromedriver: true
-      
-      # Make the chrome binary available to your Python code if you read CHROME_BIN
       - name: Export CHROME_BIN
         run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
-
 
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
           pip install -r scraper/requirements.txt
 
-      - name: Run scraper
+      # Run your existing scraper (single fast feed)
+      - name: Run scraper (FAST set)
         env:
-          COMP_IDS: "10,11,15,37,40,41"
-        run: |
-          export CHROME_BIN=/usr/bin/google-chrome
-          python scraper/scraper.py
+          COMP_IDS: "${{ vars.COMP_IDS || '10,11,40' }}"   # set COMP_IDS repo variable if you want; fallback here
+        run: python scraper/scraper.py
 
-      - name: Publish JSON to data branch
+      # Pull the last published JSON + seen keys from 'data' branch (ignore errors if first run)
+      - name: Load previous state
+        run: |
+          curl -fsSL "$RAW_JSON_URL" -o prev.json || echo "{}" > prev.json
+          curl -fsSL "$RAW_SEEN_URL" -o seen_keys.json || echo "[]" > seen_keys.json
+
+      # Diff, notify, and update seen_keys.json
+      - name: Compute new arbs and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python - << 'PY'
+          import json, os, sys, textwrap, urllib.parse, subprocess
+
+          ROI_THRESHOLD_PCT = float(os.environ.get("ROI_THRESHOLD_PCT","2.0"))
+          THRESH = ROI_THRESHOLD_PCT / 100.0
+
+          def load_json(path, default):
+              try:
+                  with open(path, "r", encoding="utf-8") as f:
+                      return json.load(f)
+              except Exception:
+                  return default
+
+          cur = load_json("server/data/opportunities.json", {"items":[]})
+          if isinstance(cur, list):
+              cur = {"items": cur}
+          cur_items = cur.get("items", [])
+
+          seen = load_json("seen_keys.json", [])
+          seen_set = set(seen if isinstance(seen, list) else [])
+
+          def key(it):
+              def norm(x): return (x or "").strip().lower()
+              return "|".join([
+                  str(it.get("competitionid") or it.get("competitionId") or ""),
+                  norm(it.get("sport")),
+                  norm(it.get("game")),
+                  norm(it.get("market")),
+                  norm(it.get("match")),
+                  it.get("dateISO") or it.get("date") or ""
+              ])
+
+          # find new hits above threshold
+          new_hits = []
+          for it in cur_items:
+              roi = it.get("roi") or 0
+              try: roi = float(roi)
+              except: roi = 0.0
+              if roi >= THRESH:
+                  k = key(it)
+                  if k not in seen_set:
+                      new_hits.append(it)
+                      seen_set.add(k)
+
+          # Save updated seen_keys
+          with open("seen_keys.json", "w", encoding="utf-8") as f:
+              json.dump(sorted(list(seen_set)), f, ensure_ascii=False, indent=0)
+
+          # Prepare message (cap to 8 lines to avoid spam)
+          if new_hits:
+              new_hits.sort(key=lambda x: float(x.get("roi") or 0), reverse=True)
+              lines = []
+              for it in new_hits[:8]:
+                  roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
+                  sport = it.get("sport") or ""
+                  game  = it.get("game")  or ""
+                  market= it.get("market") or ""
+                  line  = it.get("match") or ""
+                  url   = it.get("url") or ""
+                  line_txt = f"{sport} • {game}\n{market} — {line}\nROI: {roi_pct}\n{url}"
+                  lines.append(line_txt)
+              msg = "🔥 New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(lines)
+              # write to file for curl
+              with open("msg.txt","w",encoding="utf-8") as f: f.write(msg)
+
+              # Telegram
+              tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+              chat= os.environ.get("TELEGRAM_CHAT_ID")
+              if tok and chat:
+                  api = f"https://api.telegram.org/bot{tok}/sendMessage"
+                  subprocess.run([
+                      "curl","-fsS","-X","POST",api,
+                      "-d", f"chat_id={chat}",
+                      "-d", "parse_mode=HTML",
+                      "--data-urlencode","disable_web_page_preview=true",
+                      "--data-urlencode", f"text={msg}"
+                  ], check=False)
+
+              # Discord
+              wh = os.environ.get("DISCORD_WEBHOOK_URL")
+              if wh:
+                  payload = json.dumps({"content": msg})
+                  subprocess.run([
+                      "curl","-fsS","-H","Content-Type: application/json",
+                      "-d", payload, wh
+                  ], check=False)
+          else:
+              # nothing new; no notification
+              pass
+          PY
+
+      # Publish both the JSON and the updated seen_keys.json to data branch
+      - name: Publish JSON + seen_keys to data branch
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git fetch origin
           git checkout -B data
-          git add -f server/data/opportunities.json   # <-- force add despite .gitignore
-          git commit -m "data: update $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          mkdir -p server/data
+          git add -f "$PUBLISH_JSON_PATH"
+          git add -f "$SEEN_KEYS_PATH"
+          git commit -m "fast: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data --force
-
