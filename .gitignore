@@ -1,0 +1,8 @@
+# .gitignore (at repo root)
+node_modules/
+web/output.css
+web/.cache
+server/data/opportunities.json
+.venv/
+.env
+.DS_Store
