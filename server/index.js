@@ -133,6 +133,40 @@ app.get('/api/opportunities', async (req, res) => {
   res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports, competitionIds });
 });
 
+app.post('/api/trigger-scrape', express.json(), async (req, res) => {
+  if (!GH_TOKEN) return res.status(500).json({ ok:false, error: "Server missing GH_TOKEN" });
+
+  const now = Date.now();
+  if (now - lastManualTs < COOLDOWN_MS) {
+    const wait = Math.ceil((COOLDOWN_MS - (now - lastManualTs))/1000);
+    return res.status(429).json({ ok:false, error:`Please wait ${wait}s before requesting again.` });
+  }
+
+  try {
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_FILE)}/dispatches`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GH_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ref: 'main' }) // or another branch if you deploy from a different branch
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      return res.status(500).json({ ok:false, error:`GitHub API ${resp.status}: ${text}` });
+    }
+
+    lastManualTs = now;
+    res.json({ ok:true, message:'Scrape requested.' });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
+  }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(WEB_DIR, 'index.html'));
