@@ -170,7 +170,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
     # Fast path: if no rows appear quickly, skip this comp
     try:
-        has_rows = _wait_for_rows_or_timeout(driver, timeout=)
+        has_rows = _wait_for_rows_or_timeout(driver, timeout=4)
     except Exception:
         has_rows = False
     if not has_rows:
