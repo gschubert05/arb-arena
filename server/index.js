@@ -6,6 +6,7 @@ import compression from 'compression';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { fileURLToPath } from 'url';
+import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,8 +20,16 @@ const WEB_DIR = path.join(__dirname, '..', 'web');
 const DATA_FILE = path.join(__dirname, 'data', 'opportunities.json');
 
 // --- Remote data support (GitHub raw) ---
-const DATA_URL = process.env.DATA_URL || ''; // e.g. raw.githubusercontent.com/.../data/.../opportunities.json
+const DATA_URL = process.env.DATA_URL ?? 'https://raw.githubusercontent.com/gschubert05/arb-arena/data/server/data/opportunities.json';
 let cache = { ts: 0, data: { lastUpdated: null, items: [] } };
+
+const GH_OWNER = process.env.GH_OWNER || "gschubert05";
+const GH_REPO  = process.env.GH_REPO  || "arb-arena";
+const GH_WORKFLOW_FILE = process.env.GH_WORKFLOW_FILE || "scrape.yml"; // must match your file name in .github/workflows
+const GH_TOKEN = process.env.GH_TOKEN || ""; // fine-grained PAT with Actions:write + Contents:read
+
+let lastManualTs = 0; // simple cooldown
+const COOLDOWN_MS = (Number(process.env.REQUEST_COOLDOWN_SEC) || 180) * 1000;
 
 async function loadData() {
   // If DATA_URL not set, read local file (dev)
