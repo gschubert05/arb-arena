@@ -11,7 +11,7 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -20,18 +20,31 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install minimal deps
+      # Install Python deps your discover script needs
+      - name: Install Python deps (selenium + bs4)
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install selenium beautifulsoup4
 
-      - name: Run discoverer
+      # Set up Chrome + matching ChromeDriver (same as your main scraper.yml)
+      - id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+          install-chromedriver: true
+      - name: Export CHROME_BIN
+        run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+
+      # Run your Selenium-based discover script (headless by default)
+      - name: Run discoverer (headless)
         run: |
           mkdir -p server/data
-          python scraper/discover_active_compids.py --range "1-150" --skip "72,73,108,114" --out server/data/active_comp_ids.json > /dev/null
-          test -s server/data/active_comp_ids.json || echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
-          echo "Wrote: $(jq -r '.active_comp_ids|length' server/data/active_comp_ids.json) active IDs"
+          python scraper/discover_active_compids.py \
+            --range "1-150" --skip "72,73,108,114" \
+            --out server/data/active_comp_ids.json -v
 
+      # Publish to data branch so scraper.yml can load it
       - name: Publish active_comp_ids.json to data branch
         run: |
           git config user.name "github-actions"

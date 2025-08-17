@@ -1,48 +1,39 @@
 #!/usr/bin/env python3
 import argparse
-import concurrent.futures
 import json
 import os
-import re
 import sys
 import time
-from typing import List, Set
+from typing import Dict, List, Optional, Set, Tuple
 
-import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 BASE_URL = "http://odds.aussportsbetting.com/betting?competitionid={}"
-DEFAULT_TIMEOUT = 10
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; ArbFinder/1.0; +https://example.com)"
-}
 
-# Heuristics:
-# - Presence of 'addSelection(' JS hook anywhere in the HTML
-# - or at least one element with id="more-market-odds"
-SEL_RE = re.compile(r"addSelection\s*\(")
-
-def has_rows_for_comp(comp_id: int, timeout: int = DEFAULT_TIMEOUT) -> bool:
-    url = BASE_URL.format(comp_id)
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=timeout)
-        if resp.status_code != 200:
-            return False
-        html = resp.text
-        if SEL_RE.search(html):
-            return True
-        soup = BeautifulSoup(html, "html.parser")
-        if soup.find(id="more-market-odds"):
-            return True
-        # fallback: look for any <a onclick="addSelection(..."> anchor (some pages inline it)
-        if soup.find("a", onclick=SEL_RE):
-            return True
-        return False
-    except Exception:
-        return False
+def make_driver(headful: bool = False) -> webdriver.Chrome:
+    opts = Options()
+    if not headful:
+        # headless=new is best with recent Chromes
+        opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1600,1200")
+    # A realistic UA can help if site gates content
+    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36")
+    # Optional: slightly faster load strategy
+    # opts.page_load_strategy = "eager"
+    return webdriver.Chrome(options=opts)
 
 def parse_range(range_str: str) -> List[int]:
-    parts = []
+    out: List[int] = []
     for piece in range_str.split(","):
         piece = piece.strip()
         if not piece:
@@ -51,56 +42,186 @@ def parse_range(range_str: str) -> List[int]:
             a, b = piece.split("-", 1)
             a, b = int(a), int(b)
             lo, hi = (a, b) if a <= b else (b, a)
-            parts.extend(range(lo, hi + 1))
+            out.extend(range(lo, hi + 1))
         else:
-            parts.append(int(piece))
-    return parts
+            out.append(int(piece))
+    return out
+
+def ensure_dir(path: Optional[str]) -> None:
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+def save_html(dirpath: Optional[str], comp_id: int, html: str) -> None:
+    if not dirpath: return
+    ensure_dir(dirpath)
+    with open(os.path.join(dirpath, f"comp_{comp_id}.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+
+def save_screenshot(driver: webdriver.Chrome, dirpath: Optional[str], comp_id: int) -> None:
+    if not dirpath: return
+    ensure_dir(dirpath)
+    driver.save_screenshot(os.path.join(dirpath, f"comp_{comp_id}.png"))
+
+def inspect_dom(page_html: str) -> Tuple[bool, str, Dict[str, int]]:
+    """
+    Decide if page shows odds rows. Return (is_active, reason, counts).
+    Heuristics (all from rendered DOM):
+      1) any <td id="more-market-odds"> cells
+      2) any anchor with onclick containing 'addSelection('
+      3) any table/tbody whose first row has a 'Market %' header cell
+    """
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    # 1) direct odds cells
+    tds = soup.find_all("td", id="more-market-odds")
+    if len(tds) > 0:
+        return True, f"td#more-market-odds x{len(tds)}", {"td_more_market_odds": len(tds), "a_addSelection": 0, "market_header_tables": 0}
+
+    # 2) anchors calling addSelection
+    anchors = soup.find_all("a", onclick=True)
+    a_sel = sum(1 for a in anchors if "addSelection(" in (a.get("onclick") or ""))
+    if a_sel > 0:
+        return True, f"<a onclick=addSelection> x{a_sel}", {"td_more_market_odds": 0, "a_addSelection": a_sel, "market_header_tables": 0}
+
+    # 3) tables that look like the odds listing (header has "Market %")
+    tables = soup.find_all("tbody")
+    header_hits = 0
+    for tb in tables:
+        first_tr = tb.find("tr")
+        if not first_tr:
+            continue
+        headers = [td.get_text(strip=True) for td in first_tr.find_all("td")]
+        if any(h.lower() in ("market %", "market%") for h in headers):
+            # ensure there is at least one body row beyond the header
+            rows = tb.find_all("tr", recursive=False)
+            if len(rows) > 1:
+                header_hits += 1
+    if header_hits > 0:
+        return True, f'table with "Market %" header x{header_hits}', {"td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": header_hits}
+
+    return False, "no odds markers found", {"td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": 0}
+
+def check_competition(
+    driver: webdriver.Chrome,
+    comp_id: int,
+    wait_secs: int,
+    extra_sleep: float,
+    save_bad_html_dir: Optional[str],
+    save_bad_screens_dir: Optional[str],
+    save_all_html_dir: Optional[str],
+    save_all_screens_dir: Optional[str],
+    very_verbose: bool
+) -> Tuple[int, bool, str, Dict[str, int]]:
+    url = BASE_URL.format(comp_id)
+    try:
+        driver.get(url)
+        # Wait for at least one <table> (matches your old script)
+        try:
+            WebDriverWait(driver, wait_secs).until(
+                EC.presence_of_all_elements_located((By.TAG_NAME, "table"))
+            )
+        except TimeoutException:
+            # Save evidence
+            save_screenshot(driver, save_bad_screens_dir, comp_id)
+            html = driver.page_source
+            save_html(save_bad_html_dir, comp_id, html)
+            return comp_id, False, "timeout waiting for <table>", {}
+
+        # slight settle
+        if extra_sleep > 0:
+            time.sleep(extra_sleep)
+
+        html = driver.page_source
+        is_active, reason, counts = inspect_dom(html)
+
+        # Save assets if requested
+        if save_all_html_dir: save_html(save_all_html_dir, comp_id, html)
+        if save_all_screens_dir: save_screenshot(driver, save_all_screens_dir, comp_id)
+        if (not is_active):
+            save_html(save_bad_html_dir, comp_id, html)
+            save_screenshot(driver, save_bad_screens_dir, comp_id)
+
+        return comp_id, is_active, reason if not very_verbose else f"{reason} | counts={counts}", counts
+
+    except WebDriverException as e:
+        return comp_id, False, f"webdriver error: {e.__class__.__name__}", {}
 
 def main():
-    ap = argparse.ArgumentParser(description="Discover active competition IDs on aussportsbetting.com.")
-    ap.add_argument("--range", default="1-150", help='ID range/list, e.g. "1-150" or "1-20,40,41"')
+    ap = argparse.ArgumentParser(description="Discover active competition IDs via Selenium.")
+    mx = ap.add_mutually_exclusive_group()
+    mx.add_argument("--range", help='ID range/list, e.g. "1-150" or "1-20,40,41"')
+    mx.add_argument("--single", type=int, help="Test a single comp ID")
+
     ap.add_argument("--skip", default="72,73,108,114", help="Comma-separated IDs to skip")
     ap.add_argument("--out", default="server/data/active_comp_ids.json", help="Where to write JSON list")
-    ap.add_argument("--threads", type=int, default=16, help="Concurrent workers")
-    ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="Per-request timeout (s)")
+    ap.add_argument("--wait", type=int, default=12, help="Max seconds to wait for <table>")
+    ap.add_argument("--sleep", type=float, default=0.8, help="Extra sleep after wait (settle time)")
+    ap.add_argument("--headful", action="store_true", help="Show a real browser (non-headless)")
+
+    ap.add_argument("-v", "--verbose", action="store_true", help="Per-ID status lines")
+    ap.add_argument("-vv", "--very-verbose", action="store_true", help="Verbose + include heuristic counts")
+    ap.add_argument("--save-bad-html", default=None, help="Dir to save HTML for inactive/error pages")
+    ap.add_argument("--save-bad-screens", default=None, help="Dir to save screenshots for inactive/error pages")
+    ap.add_argument("--save-all-html", default=None, help="Dir to save HTML for all pages")
+    ap.add_argument("--save-all-screens", default=None, help="Dir to save screenshots for all pages")
+
     args = ap.parse_args()
+    if args.very_verbose:
+        args.verbose = True
 
-    ids = parse_range(args.range)
+    # Build candidate IDs
+    if args.single is not None:
+        ids = [args.single]
+    else:
+        rng = args.range or "1-150"
+        ids = parse_range(rng)
+
     skip: Set[int] = set(int(x.strip()) for x in args.skip.split(",") if x.strip())
-
     candidates = [i for i in ids if i not in skip]
+
+    if not candidates:
+        print("", end="")  # print empty CSV
+        return
+
     active: List[int] = []
+    meta_per_id: Dict[int, Dict[str, int]] = {}
 
     start = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as ex:
-        fut_to_id = {ex.submit(has_rows_for_comp, cid, args.timeout): cid for cid in candidates}
-        for fut in concurrent.futures.as_completed(fut_to_id):
-            cid = fut_to_id[fut]
-            ok = False
-            try:
-                ok = fut.result()
-            except Exception:
-                ok = False
+    driver = make_driver(headful=args.headful)
+    try:
+        for cid in candidates:
+            cid, ok, reason, counts = check_competition(
+                driver, cid, args.wait, args.sleep,
+                args.save_bad_html, args.save_bad_screens,
+                args.save_all_html, args.save_all_screens,
+                args.very_verbose
+            )
+            meta_per_id[cid] = counts
+            if args.verbose:
+                print(f"[{cid:>3}] {'ACTIVE' if ok else '----- '}  {reason}", file=sys.stderr)
             if ok:
                 active.append(cid)
+    finally:
+        driver.quit()
 
     active.sort()
+    # Write JSON (same shape your workflow expects)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump({"discoveredAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                   "range": args.range,
-                   "skip": sorted(list(skip)),
-                   "active_comp_ids": active}, f, ensure_ascii=False, indent=2)
+        json.dump({
+            "discoveredAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "range": args.range or (f"{args.single}" if args.single is not None else "1-150"),
+            "skip": sorted(list(skip)),
+            "active_comp_ids": active,
+            "debug_counts": meta_per_id,  # optional extra debug
+        }, f, ensure_ascii=False, indent=2)
 
-    # For easy piping into $GITHUB_ENV, also print a compact comma-separated string to stdout
+    # Print compact CSV for CI piping
     print(",".join(str(x) for x in active))
 
-    # Exit non-zero if none found (optional). For now, success even if empty.
-    # if not active:
-    #     sys.exit(2)
-
     dur = time.time() - start
-    sys.stderr.write(f"Discovered {len(active)} active IDs in {dur:.1f}s\n")
+    if args.verbose:
+        print(f"Discovered {len(active)} active IDs in {dur:.1f}s", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
