@@ -109,6 +109,59 @@ function renderSortIndicators() {
   });
 }
 
+async function requestUpdateAndPoll() {
+  const status = document.getElementById('updateStatus');
+  const btn = document.getElementById('requestUpdate');
+
+  // remember the current data "signature" to detect change
+  let beforeTotal = Number(document.getElementById('totalCount').textContent) || 0;
+
+  btn.disabled = true;
+  status.textContent = 'Requesting…';
+
+  // hit the trigger endpoint
+  let ok = false, msg = '';
+  try {
+    const res = await fetch('/api/trigger-scrape', { method: 'POST', headers: { 'Content-Type':'application/json' }});
+    const j = await res.json();
+    ok = j.ok; msg = j.message || j.error || '';
+  } catch (e) {
+    msg = String(e);
+  }
+
+  if (!ok) {
+    status.textContent = `Failed: ${msg || 'Unknown error'}`;
+    btn.disabled = false;
+    return;
+  }
+
+  status.textContent = 'Updating… (this can take a couple of minutes)';
+  // poll for new data (up to ~5 min, every 15s)
+  const start = Date.now();
+  const limitMs = 5 * 60 * 1000;
+  const intervalMs = 15000;
+
+  const poll = async () => {
+    await fetchData(); // refresh the table
+    const nowTotal = Number(document.getElementById('totalCount').textContent) || 0;
+    // crude signal: count change or just rely on server lastUpdated if you expose it
+    if (nowTotal !== beforeTotal) {
+      status.textContent = 'Updated ✔';
+      btn.disabled = false;
+      setTimeout(() => (status.textContent=''), 4000);
+      return;
+    }
+    if (Date.now() - start > limitMs) {
+      status.textContent = 'No change detected yet.';
+      btn.disabled = false;
+    } else {
+      setTimeout(poll, intervalMs);
+    }
+  };
+  setTimeout(poll, intervalMs);
+}
+
+
 // --- Fetch + render ---
 async function fetchData() {
   const res = await fetch(`/api/opportunities?${qs()}`);
@@ -222,6 +275,8 @@ addEventListener('click', (e) => {
     setTimeout(() => (btn.textContent = 'Copy'), 1200);
   });
 });
+
+document.getElementById('requestUpdate')?.addEventListener('click', requestUpdateAndPoll);
 
 // init
 fetchData();
