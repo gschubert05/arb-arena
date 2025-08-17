@@ -139,7 +139,7 @@ def _safe_text(el) -> str:
     return el.get_text(strip=True) if el else ""
 
 
-def _wait_for_rows_or_timeout(driver: webdriver.Chrome, timeout: float = 2.5) -> bool:
+def _wait_for_rows_or_timeout(driver: webdriver.Chrome, timeout: float = 4) -> bool:
     """
     Poll for presence of at least one 'td#more-market-odds' quickly.
     Return True if found, False if not within timeout.
@@ -170,7 +170,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
     # Fast path: if no rows appear quickly, skip this comp
     try:
-        has_rows = _wait_for_rows_or_timeout(driver, timeout=2.5)
+        has_rows = _wait_for_rows_or_timeout(driver, timeout=)
     except Exception:
         has_rows = False
     if not has_rows:
