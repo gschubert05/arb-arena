@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "2-59/5 * * * *"   # every 5 minutes, starting at :02 UTC
+
 permissions:
   contents: write
 
@@ -21,6 +22,8 @@ env:
   # raw URLs to read previous state
   RAW_JSON_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/opportunities.json"
   RAW_SEEN_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/seen_keys.json"
+  # active competition ids, written daily by the discover workflow
+  RAW_ACTIVE_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/active_comp_ids.json"
 
 jobs:
   scrape:
@@ -49,10 +52,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scraper/requirements.txt
 
+      # Load previously discovered active comp IDs (from data branch)
+      - name: Load active competition IDs
+        run: |
+          mkdir -p server/data
+          curl -fsSL "$RAW_ACTIVE_URL" -o server/data/active_comp_ids.json || echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
+          COMP_IDS=$(python - <<'PY'
+          import json,sys
+          try:
+              d=json.load(open("server/data/active_comp_ids.json","r",encoding="utf-8"))
+              ids=d.get("active_comp_ids",[])
+              print(",".join(str(x) for x in ids))
+          except Exception:
+              print("")
+          PY
+          )
+          echo "COMP_IDS=${COMP_IDS}" >> $GITHUB_ENV
+          echo "Loaded COMP_IDS=${COMP_IDS}"
+
       # Run your existing scraper (single fast feed)
       - name: Run scraper (FAST set)
         env:
-          COMP_IDS: "${{ vars.COMP_IDS || '10,11,40,41' }}"   # set COMP_IDS repo variable if you want; fallback here
+          # Prefer discovered IDs; else use repo variable; else fallback
+          COMP_IDS: "${{ env.COMP_IDS || vars.COMP_IDS || '10,11,40,41' }}"
         run: python scraper/scraper.py
 
       # Pull the last published JSON + seen keys from 'data' branch (ignore errors if first run)
@@ -67,6 +89,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ROI_THRESHOLD_PCT:  ${{ env.ROI_THRESHOLD_PCT }}
         run: |
           python - << 'PY'
           import json, os, sys, textwrap, urllib.parse, subprocess
@@ -118,7 +141,7 @@ jobs:
 
           # Prepare message (cap to 8 lines to avoid spam)
           if new_hits:
-              new_hits.sort(key=lambda x: float(x.get("roi") or 0), reverse=True)
+              new_hits.sort(key=lambda x: float(x.get('roi') or 0), reverse=True)
               lines = []
               for it in new_hits[:8]:
                   roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
@@ -130,7 +153,6 @@ jobs:
                   line_txt = f"{sport} • {game}\n{market} — {line}\nROI: {roi_pct}\n{url}"
                   lines.append(line_txt)
               msg = "New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(lines)
-              # write to file for curl
               with open("msg.txt","w",encoding="utf-8") as f: f.write(msg)
 
               # Telegram
@@ -158,6 +180,7 @@ jobs:
               # nothing new; no notification
               pass
           PY
+
       - name: Place seen_keys.json where we commit it from
         run: |
           mkdir -p server/data
@@ -165,7 +188,7 @@ jobs:
           test -f seen_keys.json || echo "[]" > seen_keys.json
           mv -f seen_keys.json server/data/seen_keys.json
 
-      # Publish both the JSON and the updated seen_keys.json to data branch
+      # Publish both the JSON and the updated seen_keys.json (and active IDs if present) to data branch
       - name: Publish JSON + seen_keys to data branch
         run: |
           git config user.name "github-actions"
@@ -175,5 +198,7 @@ jobs:
           mkdir -p server/data
           git add -f "$PUBLISH_JSON_PATH"
           git add -f "$SEEN_KEYS_PATH"
+          # Keep publishing the known-good list so scraper runs always have something to load
+          test -f server/data/active_comp_ids.json && git add -f server/data/active_comp_ids.json || true
           git commit -m "fast: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data --force

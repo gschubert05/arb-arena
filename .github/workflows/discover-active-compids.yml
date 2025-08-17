@@ -1,0 +1,44 @@
+name: Discover active comp IDs (daily)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "12 0 * * *"  # daily at 00:12 UTC
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run discoverer
+        run: |
+          mkdir -p server/data
+          python scraper/discover_active_compids.py --range "1-150" --skip "72,73,108,114" --out server/data/active_comp_ids.json > /dev/null
+          test -s server/data/active_comp_ids.json || echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
+          echo "Wrote: $(jq -r '.active_comp_ids|length' server/data/active_comp_ids.json) active IDs"
+
+      - name: Publish active_comp_ids.json to data branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git fetch origin
+          git checkout -B data
+          mkdir -p server/data
+          git add -f server/data/active_comp_ids.json
+          git commit -m "discover: active comp IDs $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git push origin data --force
