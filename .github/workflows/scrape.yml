@@ -52,7 +52,7 @@ jobs:
       # Run your existing scraper (single fast feed)
       - name: Run scraper (FAST set)
         env:
-          COMP_IDS: "${{ vars.COMP_IDS || '1-150' }}"   # set COMP_IDS repo variable if you want; fallback here
+          COMP_IDS: "${{ vars.COMP_IDS || '1-50' }}"   # set COMP_IDS repo variable if you want; fallback here
         run: python scraper/scraper.py
 
       # Pull the last published JSON + seen keys from 'data' branch (ignore errors if first run)
