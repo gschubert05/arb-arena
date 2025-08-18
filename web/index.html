@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Arbitrage Finder – Live Opportunities</title>
-  <!-- Compiled Tailwind + your custom styles -->
   <link rel="stylesheet" href="/output.css" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,12 +13,9 @@
   <style>
     body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
     tbody tr { transition: background-color .12s ease; }
-    html:not(.dark) tbody tr:hover { background: #f8fafc; }   /* light */
-    html.dark tbody tr:hover { background: #0f172a; }          /* dark */
-    /* Turn off any old content arrows */
+    html:not(.dark) tbody tr:hover { background: #f8fafc; }
+    html.dark tbody tr:hover { background: #0f172a; }
     thead th[data-sort]::after { content: none !important; }
-
-    /* Size + alignment for our injected SVGs */
     .sort-indicator svg { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
   </style>
 </head>
@@ -44,7 +40,6 @@
       </div>
     </div>
   </header>
-
 
   <main class="max-w-7xl mx-auto px-4 lg:px-6 pb-16">
     <!-- Filters -->
@@ -99,7 +94,6 @@
       </div>
     </section>
 
-
     <!-- Table -->
     <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="overflow-x-auto">
@@ -112,8 +106,8 @@
               <th class="px-4 py-3 text-left">Market</th>
               <th class="px-4 py-3 text-left">Line</th>
               <th class="px-4 py-3 text-right cursor-pointer" data-sort="roi">ROI</th>
-              <th class="px-4 py-3 text-right">Search Phrase</th>
-              <th class="px-4 py-3 text-left">Odds Page</th>
+              <th class="px-4 py-3 text-left">Bookies</th>
+              <th class="px-4 py-3 text-right">Details</th>
             </tr>
           </thead>
           <tbody id="tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
@@ -136,46 +130,8 @@
       </div>
     </section>
   </main>
-  <!-- Intro / how-to modal -->
-  <div id="introModal" class="fixed inset-0 z-[100] hidden">
-    <!-- overlay -->
-    <div id="introOverlay" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
 
-    <!-- card -->
-    <div class="relative mx-auto mt-24 w-[92%] max-w-xl rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg">
-      <div class="p-5">
-        <div class="flex items-center gap-3 mb-3">
-          <img src="/logo.svg" alt="Arb Arena" class="h-8 w-8 rounded-lg" />
-          <h3 class="text-xl font-semibold">How to use Arb Arena</h3>
-        </div>
-
-        <p class="text-slate-600 dark:text-slate-300 text-sm leading-6">
-          To find the exact bookmakers for an opportunity:
-        </p>
-        <ol class="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
-          <li>1. In the table, click <span class="font-semibold">Copy</span> next to the search phrase, then click <span class="font-semibold">Go</span>.</li>
-          <li>2. On the AusSportsBetting odds page, press
-            <span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">Ctrl</span>+
-            <span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">F</span>
-            (<span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">⌘</span>+
-            <span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">F</span> on Mac),
-            then
-            <span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">Ctrl</span>+
-            <span class="px-1 rounded border bg-slate-100 dark:bg-slate-700">V</span>
-            to paste the search phrase.</li>
-          <li>3. You’ll jump straight to the line with the bookmakers for that market.</li>
-        </ol>
-
-        <div class="mt-5 flex items-center justify-between">
-          <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <input type="checkbox" id="introDontShow" class="rounded border-slate-300 dark:border-slate-600" />
-            Don’t show again
-          </label>
-          <button id="introClose" class="px-3 py-2 rounded-xl bg-primary hover:bg-blue-700 text-white">Got it</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- (Optional) Keep intro modal for now; you can remove later since we no longer need to send users off-site. -->
 
   <script src="/app.js" defer></script>
 </body>
