@@ -121,6 +121,9 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
         except Exception:
             pass
 
+        if market_name.startswith("Win"):
+            continue
+            
         try:
             third_parent_tr = td.find_parent("tr").find_parent("tr").find_parent("tr")
             game_tr = third_parent_tr.find_previous_sibling("tr") if third_parent_tr else None
