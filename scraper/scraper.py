@@ -3,7 +3,7 @@ import re
 import json
 import time
 import datetime as dt
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -39,6 +39,10 @@ def make_driver() -> webdriver.Chrome:
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1600,1200")
+    # UA helps avoid slimmed templates
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/124.0.0.0 Safari/537.36")
     driver = webdriver.Chrome(options=options)
     return driver
 
@@ -55,6 +59,29 @@ def extract_search_phrase(match_text: str) -> str:
         return phrase
     except Exception:
         return match_text
+
+
+def _parse_time_tail(text: str) -> Optional[str]:
+    # Find a time like 18:03 anywhere in the cell; prefer the last occurrence
+    m = re.findall(r"\b(\d{1,2}:\d{2})\b", text or "")
+    return m[-1] if m else None
+
+
+def _parse_float(text: str) -> Optional[float]:
+    try:
+        return float(text.strip())
+    except Exception:
+        # fallback: last decimal number in text
+        nums = re.findall(r"(\d+(?:\.\d+)?)", text or "")
+        return float(nums[-1]) if nums else None
+
+
+def _norm(s: str) -> str:
+    return (s or "").strip()
+
+
+def _contains_ci(hay: str, needle: str) -> bool:
+    return (needle or "").lower() in (hay or "").lower()
 
 
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
@@ -96,16 +123,12 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
         if len(a_tags) == 3:
             try:
                 mid_text = a_tags[1].get_text(strip=True)
-                # parse odds from "... - 1.00"
                 mid_odds = float(mid_text.split('-')[-1].strip())
             except Exception:
                 mid_odds = None
-
             if mid_odds is not None and abs(mid_odds - 1.0) < 1e-6:
-                # treat as two-way using a_tags[0] and a_tags[2]
                 use_outer_two = True
             else:
-                # real 3-way market: skip
                 continue
 
         # Market and game extraction via parent traversal
@@ -121,9 +144,10 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
         except Exception:
             pass
 
+        # Skip markets that start with "Win"
         if market_name.startswith("Win"):
             continue
-            
+
         try:
             third_parent_tr = td.find_parent("tr").find_parent("tr").find_parent("tr")
             game_tr = third_parent_tr.find_previous_sibling("tr") if third_parent_tr else None
@@ -181,7 +205,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
         match_pair = f"{link_text_1} | {link_text_2}"
         row = {
-            "url": full_url or f"http://odds.aussportsbetting.com/betting?competitionid={compid}",
+            "url": full_url or BETTING_FALLBACK_URL.format(compid=compid),
             "market_percentage": round(market_pct, 2),
             "roi": round(roi, 6),
             "match": match_pair,
@@ -213,6 +237,119 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
     return rows
 
 
+def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_phrase: str) -> Optional[Dict[str, Any]]:
+    """
+    Open the /betting?... page at `url`, find the <td.subheading> containing `search_phrase`,
+    then read the table of agencies beneath it following the structure you described.
+    Returns:
+      {
+        "headers": ["Agency", left_head, right_head, "Updated"],
+        "rows": [{"agency": "...", "left": "1.91", "right": "1.95", "updated": "18:03"}, ...],
+        "best": {"left": {"agency":"...", "odds": 1.95}, "right": {...}}
+      }
+    or None if not found.
+    """
+    try:
+        driver.get(url)
+        # ensure tables are present
+        try:
+            WebDriverWait(driver, 12).until(EC.presence_of_all_elements_located((By.TAG_NAME, "table")))
+        except Exception:
+            pass  # continue anyway; some pages render immediately
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+
+        # Find the subheading cell that contains the search phrase
+        subcells = soup.find_all("td", class_="subheading")
+        anchor_cell = None
+        for td_sub in subcells:
+            if _contains_ci(td_sub.get_text(" ", strip=True), search_phrase):
+                anchor_cell = td_sub
+                break
+        if not anchor_cell:
+            return None
+
+        anchor_tr = anchor_cell.find_parent("tr")
+        if not anchor_tr:
+            return None
+
+        # The anchor row has 5 tds; 3rd and 4th are headings for the market
+        anchor_tds = anchor_tr.find_all("td", recursive=False)
+        if len(anchor_tds) < 4:
+            return None
+
+        left_head = _norm(anchor_tds[2].get_text(" ", strip=True))
+        right_head = _norm(anchor_tds[3].get_text(" ", strip=True))
+        headers = ["Agency", left_head, right_head, "Updated"]
+
+        # Now iterate subsequent rows:
+        # after anchor_tr there's an empty tr, then an agency row of 4 tds; repeat.
+        rows = []
+        # Walk siblings until we hit the next subheading row
+        tr = anchor_tr.find_next_sibling("tr")
+        while tr:
+            tds = tr.find_all("td", recursive=False)
+
+            # Stop when we reach the next subheading (new market line)
+            if tds and any("subheading" in (td.get("class") or []) for td in tds):
+                break
+
+            # Skip empty spacer rows (no real cells or just whitespace)
+            if not tds or all(_norm(td.get_text()) == "" for td in tds):
+                tr = tr.find_next_sibling("tr")
+                continue
+
+            # Expect agency row with 4 tds
+            if len(tds) >= 4:
+                # First td: <a> with agency name
+                agency = ""
+                a = tds[0].find("a")
+                if a:
+                    agency = _norm(a.get_text(strip=True))
+                else:
+                    agency = _norm(tds[0].get_text(" ", strip=True))
+
+                left_txt = _norm(tds[1].get_text(" ", strip=True))
+                right_txt = _norm(tds[2].get_text(" ", strip=True))
+                updated_txt = _norm(tds[3].get_text(" ", strip=True))
+                updated = _parse_time_tail(updated_txt) or updated_txt
+
+                rows.append({
+                    "agency": agency,
+                    "left": left_txt,
+                    "right": right_txt,
+                    "updated": updated,
+                })
+
+            # move to next row (there may be a blank spacer; loop handles it)
+            tr = tr.find_next_sibling("tr")
+
+        if not rows:
+            return None
+
+        # Find best odds per side (numeric)
+        best_left: Tuple[Optional[str], float] = (None, -1.0)
+        best_right: Tuple[Optional[str], float] = (None, -1.0)
+
+        for r in rows:
+            lf = _parse_float(r.get("left") or "")
+            rf = _parse_float(r.get("right") or "")
+            if lf is not None and lf > best_left[1]:
+                best_left = (r["agency"], lf)
+            if rf is not None and rf > best_right[1]:
+                best_right = (r["agency"], rf)
+
+        best = {
+            "left": {"agency": best_left[0], "odds": best_left[1] if best_left[1] > 0 else None},
+            "right": {"agency": best_right[0], "odds": best_right[1] if best_right[1] > 0 else None},
+        }
+
+        return {"headers": headers, "rows": rows, "best": best}
+
+    except Exception:
+        return None
+
+
 def run_once(comp_ids: List[int]) -> Dict[str, Any]:
     driver = make_driver()
     all_rows: List[Dict[str, Any]] = []
@@ -225,6 +362,23 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
                 print(f"  + {len(rows)} rows")
             except Exception as e:
                 print(f"  ! Error on compid {compid}: {e}")
+
+        # --------- NEW: enrich each arb with the bookies table ----------
+        # Cache repeated URL+search_phrase so we don’t fetch the same page twice
+        table_cache: Dict[Tuple[str, str], Optional[Dict[str, Any]]] = {}
+        for it in all_rows:
+            url = it.get("url")
+            if not url:
+                continue  # skip, no betting link to scrape
+            phrase = it.get("search_phrase") or ""
+            key = (url, phrase)
+            if key not in table_cache:
+                table_cache[key] = _scrape_betting_table_for_search(driver, url, phrase)
+            table = table_cache[key]
+            if table:
+                it["book_table"] = table
+        # ----------------------------------------------------------------
+
     finally:
         driver.quit()
 
