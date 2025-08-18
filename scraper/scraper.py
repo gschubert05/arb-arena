@@ -5,8 +5,7 @@ import time
 import datetime as dt
 from typing import List, Dict, Any, Optional, Tuple
 
-from bs4 import BeautifulSoup
-from bs4 import NavigableString
+from bs4 import BeautifulSoup, NavigableString
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -83,6 +82,38 @@ def _norm(s: str) -> str:
 
 def _contains_ci(hay: str, needle: str) -> bool:
     return (needle or "").lower() in (hay or "").lower()
+
+def _updated_from_td(td) -> str:
+    """
+    Prefer the JS timestamp inside <script>write_local_time(…)</script>.
+    Fallback to last direct text node (not inside child tags).
+    Returns HH:MM (24h) or "".
+    """
+    if td is None:
+        return ""
+
+    # 1) Try <script>write_local_time(1755509596000);</script>
+    for sc in td.find_all("script"):
+        s = sc.string or ""
+        m = re.search(r"write_local_time\(\s*(\d{10,})\s*\)", s)
+        if m:
+            try:
+                ms = int(m.group(1))
+                t = dt.datetime.fromtimestamp(ms / 1000.0)  # local time of runner
+                return t.strftime("%H:%M")
+            except Exception:
+                pass
+
+    # 2) Fallback: last direct text node (ignore children like <span>/<script>)
+    direct_texts = [
+        (txt or "").strip()
+        for txt in td.find_all(string=True, recursive=False)
+        if isinstance(txt, NavigableString) and (txt or "").strip()
+    ]
+    candidate = direct_texts[-1] if direct_texts else (td.get_text(" ", strip=True) or "")
+    m2 = re.search(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", candidate)
+    return m2.group(1) if m2 else candidate
+
 
 
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
