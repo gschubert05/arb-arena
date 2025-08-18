@@ -6,10 +6,12 @@
       <stop offset="1" stop-color="#60a5fa"/>
     </linearGradient>
   </defs>
-  <!-- Shield -->
-  <path d="M32 14l16 6v12c0 10-6 18-16 22-10-4-16-12-16-22V20l16-6z"
-        fill="url(#shieldGrad)" stroke="#fff" stroke-width="2"/>
-  <!-- A -->
-  <path d="M32 20l9 20h-5l-1.5-4h-5l-1.5 4h-5l9-20zm0 7l-2.6 6h5.2L32 27z"
-        fill="#fff"/>
+  <g transform="scale(1.5) translate(-11 -13)">
+    <!-- Shield -->
+    <path d="M32 14l16 6v12c0 10-6 18-16 22-10-4-16-12-16-22V20l16-6z"
+          fill="url(#shieldGrad)" stroke="#fff" stroke-width="2"/>
+    <!-- A -->
+    <path d="M32 20l9 20h-5l-1.5-4h-5l-1.5 4h-5l9-20zm0 7l-2.6 6h5.2L32 27z"
+          fill="#fff"/>
+  </g>
 </svg>
