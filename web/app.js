@@ -117,24 +117,17 @@ function cleanAgencyName(name) {
   return out.trim();
 }
 
-// Map of clean bookie names → logo URLs
-const BOOKIE_LOGOS = {
-  "Sportsbet": "https://asset.brandfetch.io/idimoFUpcz/idD_806s30.jpeg",
-  "Bet365": "https://bettingsites.ltd.uk/img/logos/brands/400x400/bet365.png",
-  "Tab": "https://play-lh.googleusercontent.com/b7L0mFP1-Jn129IT42Vf_o7vXbvWDHSicFTQpE7GBAyEU4uEYsjc8Pn03sEYnyPyGw=w600-h300-pc0xffffff-pd",
-  "Betright": "https://pbs.twimg.com/profile_images/1634075300387786753/vdZRjtHV_400x400.png",
-  "Neds": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlfSxgfJjnQ7M5j-BJf2G0EOUYpoK6y2rdYA&s",
-  "Betfair": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/69/45/16/694516a5-32ca-4357-344d-808c58dca013/AppIcon-0-0-1x_U007emarketing-0-9-0-85-220.png/256x256bb.jpg",
-  "Playup": "https://media.licdn.com/dms/image/v2/C560BAQFAnZXdl99b_Q/company-logo_200_200/company-logo_200_200/0/1632376484990/playup_ltd_logo?e=2147483647&v=beta&t=fimSDvLJMueiyRE7eJ4aIWBMQgkN48tTrb11xM4c-0g",
-  "Dabble": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUnQrrohotJjfKas4oWDVsDov6oLxHrrl9Vw&s",
-  "Betr": "https://play-lh.googleusercontent.com/exKUNdvp4UeShHwjbePbk057Hz1mWxXLNJ2_ccF22CclyHVoUXAYrNJrpIPUqhl_A0sX",
-  "Pointsbet": "https://play-lh.googleusercontent.com/UxyfS_-i2RIjYXFyfPxdjslrYr4ZnrdJo9YAa0PaMcBNtzCTEm6jaIe_lrrUoZfUrSU",
-  "Boombet": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c7/1a/36/c71a365e-38ba-62ee-ac0b-5d6f2793e85f/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
-};
+function agencySlug(name) {
+  return cleanAgencyName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')   // replace spaces/symbols with hyphens
+    .replace(/(^-|-$)/g, '');      // trim leading/trailing hyphens
+}
 
 function logoFor(name) {
-  const clean = cleanAgencyName(name);
-  return BOOKIE_LOGOS[clean] || '/logos/placeholder.svg';
+  const slug = agencySlug(name);
+  // point to your local images folder
+  return `/images/${slug}.jpeg`; // or .jpg if that’s the format you saved
 }
 
 // --- Render helpers for book_table ---
