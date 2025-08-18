@@ -17,6 +17,31 @@
     html.dark tbody tr:hover { background: #0f172a; }
     thead th[data-sort]::after { content: none !important; }
     .sort-indicator svg { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
+    .bookie-chip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      background-color: #0d2b1e; /* same greeny background you had */
+      border-radius: 6px;
+      padding: 4px 8px;
+      min-width: 120px; /* ensures some consistency */
+    }
+
+    .bookie-chip .bookie-name {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .bookie-chip .bookie-odds {
+      font-weight: 600;
+      min-width: 40px;      /* <- fixed column for odds */
+      text-align: right;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">

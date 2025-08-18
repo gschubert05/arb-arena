@@ -128,25 +128,30 @@ function logoFor(name) {
 // --- Render helpers for book_table ---
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
-  const left = bookTable.best.left || {};
+  const left  = bookTable.best.left  || {};
   const right = bookTable.best.right || {};
-  const leftName = cleanAgencyName(left.agency || '');
-  const rightName = cleanAgencyName(right.agency || '');
 
-  const chip = (side, agency, odds) => {
-    if (!agency || !odds) return '';
+  const chip = (agencyRaw, odds) => {
+    const agency = cleanAgencyName(agencyRaw || '');
+    if (!agency || odds == null) return '';
+    const oddsTxt = Number(odds).toFixed(2);
+
     return `
-      <div class="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 px-2.5 py-1 rounded-xl">
-        <img src="${logoFor(agency)}" alt="${cleanAgencyName(agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.svg'">
-        <span class="font-medium">${cleanAgencyName(agency)}</span>
-        <span class="ml-1 px-1.5 rounded bg-white/70 dark:bg-slate-800/70 tabular-nums">${Number(odds).toFixed(2)}</span>
+      <div class="flex items-center justify-between gap-2 bg-emerald-50 dark:bg-emerald-900/30
+                  text-emerald-800 dark:text-emerald-200 px-2.5 py-1 rounded-xl w-full">
+        <div class="flex items-center gap-2 min-w-0">
+          <img src="${logoFor(agency)}" alt="${agency}" class="w-5 h-5 rounded shrink-0"
+               onerror="this.src='/logos/placeholder.svg'">
+          <span class="font-medium truncate">${agency}</span>
+        </div>
+        <span class="tabular-nums text-right font-semibold min-w-[3.5rem]">${oddsTxt}</span>
       </div>`;
   };
 
   return `
-    <div class="flex flex-wrap gap-2 justify-end">
-      ${chip('left', leftName, left.odds || null)}
-      ${chip('right', rightName, right.odds || null)}
+    <div class="flex flex-col gap-2 items-stretch">
+      ${chip(left.agency, left.odds)}
+      ${chip(right.agency, right.odds)}
     </div>`;
 }
 

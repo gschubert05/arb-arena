@@ -6,6 +6,7 @@ import datetime as dt
 from typing import List, Dict, Any, Optional, Tuple
 
 from bs4 import BeautifulSoup
+from bs4 import NavigableString
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -236,34 +237,38 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
     return rows
 
-
 def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_phrase: str) -> Optional[Dict[str, Any]]:
     """
-    Open the /betting?... page at `url`, find the <td.subheading> containing `search_phrase`,
-    then read the table of agencies beneath it following the structure you described.
-    Returns:
-      {
-        "headers": ["Agency", left_head, right_head, "Updated"],
-        "rows": [{"agency": "...", "left": "1.91", "right": "1.95", "updated": "18:03"}, ...],
-        "best": {"left": {"agency":"...", "odds": 1.95}, "right": {...}}
-      }
-    or None if not found.
+    Opens `url`, finds the <td class="subheading"> that contains `search_phrase`,
+    then scrapes the agencies table beneath it. Layout rules:
+
+      MAIN MARKET: header_len > 5
+        headers: left = 3rd td, right = 5th td
+        rows:    agency=1st, left=2nd, right=4th, updated=missing ("")
+
+      LINE-DRAW (extra middle column):
+        detected by first data row having 5 tds
+        headers: left = 2nd td, right = 4th td
+        rows:    agency=0, left=1, right=3, updated=4
+
+      NORMAL:
+        detected by first data row having 4 tds (even if header has 5)
+        headers: left = 3rd td, right = 4th td
+        rows:    agency=0, left=1, right=2, updated=3
     """
     try:
         driver.get(url)
-        # ensure tables are present
         try:
             WebDriverWait(driver, 12).until(EC.presence_of_all_elements_located((By.TAG_NAME, "table")))
         except Exception:
-            pass  # continue anyway; some pages render immediately
+            pass
 
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
-        # Find the subheading cell that contains the search phrase
-        subcells = soup.find_all("td", class_="subheading")
+        # 1) locate our anchor subheading row
         anchor_cell = None
-        for td_sub in subcells:
-            if _contains_ci(td_sub.get_text(" ", strip=True), search_phrase):
+        for td_sub in soup.find_all("td", class_="subheading"):
+            if (search_phrase or "").lower() in td_sub.get_text(" ", strip=True).lower():
                 anchor_cell = td_sub
                 break
         if not anchor_cell:
@@ -273,67 +278,122 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
         if not anchor_tr:
             return None
 
-        # The anchor row has 5 tds; 3rd and 4th are headings for the market
-        anchor_tds = anchor_tr.find_all("td", recursive=False)
-        if len(anchor_tds) < 4:
+        header_tds = anchor_tr.find_all("td", recursive=False)
+        header_len = len(header_tds)
+
+        # 2) find the first *data* row after (skip blank spacer rows)
+        def is_blank_row(tr):
+            tds = tr.find_all("td", recursive=False)
+            return (not tds) or all((td.get_text(strip=True) == "") for td in tds)
+
+        def is_new_subheading(tr):
+            tds = tr.find_all("td", recursive=False)
+            return bool(tds and any("subheading" in (td.get("class") or []) for td in tds))
+
+        first_data_tr = anchor_tr.find_next_sibling("tr")
+        while first_data_tr and (is_blank_row(first_data_tr)):
+            first_data_tr = first_data_tr.find_next_sibling("tr")
+
+        if not first_data_tr or is_new_subheading(first_data_tr):
             return None
 
-        left_head = _norm(anchor_tds[2].get_text(" ", strip=True))
-        right_head = _norm(anchor_tds[3].get_text(" ", strip=True))
+        first_row_tds = first_data_tr.find_all("td", recursive=False)
+        row_len = len(first_row_tds)
+
+        # 3) decide mappings from (header_len, row_len)
+        if header_len > 5:
+            # MAIN MARKET
+            header_left_idx, header_right_idx = 2, 4
+            row_agency_idx, row_left_idx, row_right_idx, row_updated_idx = 0, 1, 3, None
+        elif row_len == 5:
+            # LINE-DRAW
+            header_left_idx, header_right_idx = 1, 3
+            row_agency_idx, row_left_idx, row_right_idx, row_updated_idx = 0, 1, 3, 4
+        else:
+            # NORMAL (row_len == 4 is the common case; also treat any other as normal fallback)
+            header_left_idx, header_right_idx = 2, 3
+            row_agency_idx, row_left_idx, row_right_idx, row_updated_idx = 0, 1, 2, 3
+
+        def td_text_safe(tds, idx):
+            if idx is None or idx < 0 or idx >= len(tds): return ""
+            return (tds[idx].get_text(" ", strip=True) or "").strip()
+
+        left_head = td_text_safe(header_tds, header_left_idx)
+        right_head = td_text_safe(header_tds, header_right_idx)
         headers = ["Agency", left_head, right_head, "Updated"]
 
-        # Now iterate subsequent rows:
-        # after anchor_tr there's an empty tr, then an agency row of 4 tds; repeat.
-        rows = []
-        # Walk siblings until we hit the next subheading row
-        tr = anchor_tr.find_next_sibling("tr")
-        while tr:
+        # 4) walk data rows until the next subheading
+        rows_out = []
+
+        def extract_row(tr, default_map):
             tds = tr.find_all("td", recursive=False)
+            n = len(tds)
+            # adapt mapping if actual td count differs
+            a_idx, l_idx, r_idx, u_idx = default_map
+            if n == 4:
+                a_idx, l_idx, r_idx, u_idx = 0, 1, 2, 3
+            elif n == 5:
+                a_idx, l_idx, r_idx, u_idx = 0, 1, 3, 4
+            # (for main market headers rows can still be 4/5; above handles both)
 
-            # Stop when we reach the next subheading (new market line)
-            if tds and any("subheading" in (td.get("class") or []) for td in tds):
+            def safe(idx):
+                return (tds[idx].get_text(" ", strip=True) if 0 <= idx < n else "").strip()
+
+            a = tds[a_idx].find("a") if 0 <= a_idx < n else None
+            agency = (a.get_text(strip=True) if a else safe(a_idx)).strip()
+
+            left_txt = safe(l_idx)
+            right_txt = safe(r_idx)
+
+            updated = ""
+            if u_idx is not None and 0 <= u_idx < n:
+                td_u = tds[u_idx]
+
+                # Only direct text nodes (skip <script>, <span>, etc.)
+                direct_texts = [
+                    s.strip()
+                    for s in td_u.find_all(string=True, recursive=False)
+                    if isinstance(s, NavigableString) and s.strip()
+                ]
+
+                # Prefer the last direct text; fall back to joined direct text
+                candidate = direct_texts[-1] if direct_texts else ""
+
+                # Extract a clean HH:MM from the candidate (e.g., "19:33")
+                m = re.search(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", candidate)
+                updated = m.group(1) if m else candidate
+
+            return {
+                "agency": agency,
+                "left": left_txt,
+                "right": right_txt,
+                "updated": updated if u_idx is not None else "",
+            }
+
+        # start from first_data_tr and iterate
+        tr = first_data_tr
+        default_map = (row_agency_idx, row_left_idx, row_right_idx, row_updated_idx)
+        while tr:
+            if is_new_subheading(tr):
                 break
-
-            # Skip empty spacer rows (no real cells or just whitespace)
-            if not tds or all(_norm(td.get_text()) == "" for td in tds):
-                tr = tr.find_next_sibling("tr")
-                continue
-
-            # Expect agency row with 4 tds
-            if len(tds) >= 4:
-                # First td: <a> with agency name
-                agency = ""
-                a = tds[0].find("a")
-                if a:
-                    agency = _norm(a.get_text(strip=True))
-                else:
-                    agency = _norm(tds[0].get_text(" ", strip=True))
-
-                left_txt = _norm(tds[1].get_text(" ", strip=True))
-                right_txt = _norm(tds[2].get_text(" ", strip=True))
-                updated_txt = _norm(tds[3].get_text(" ", strip=True))
-                updated = _parse_time_tail(updated_txt) or updated_txt
-
-                rows.append({
-                    "agency": agency,
-                    "left": left_txt,
-                    "right": right_txt,
-                    "updated": updated,
-                })
-
-            # move to next row (there may be a blank spacer; loop handles it)
+            if not is_blank_row(tr):
+                rows_out.append(extract_row(tr, default_map))
             tr = tr.find_next_sibling("tr")
 
-        if not rows:
+        if not rows_out:
             return None
 
-        # Find best odds per side (numeric)
-        best_left: Tuple[Optional[str], float] = (None, -1.0)
-        best_right: Tuple[Optional[str], float] = (None, -1.0)
+        # 5) best per side
+        def to_float(x):
+            try: return float(x)
+            except Exception:
+                m = re.findall(r"(\d+(?:\.\d+)?)", x or "")
+                return float(m[-1]) if m else None
 
-        for r in rows:
-            lf = _parse_float(r.get("left") or "")
-            rf = _parse_float(r.get("right") or "")
+        best_left = (None, -1.0)
+        best_right = (None, -1.0)
+        for r in rows_out:
+            lf, rf = to_float(r["left"]), to_float(r["right"])
             if lf is not None and lf > best_left[1]:
                 best_left = (r["agency"], lf)
             if rf is not None and rf > best_right[1]:
@@ -344,11 +404,10 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
             "right": {"agency": best_right[0], "odds": best_right[1] if best_right[1] > 0 else None},
         }
 
-        return {"headers": headers, "rows": rows, "best": best}
+        return {"headers": headers, "rows": rows_out, "best": best}
 
     except Exception:
         return None
-
 
 def run_once(comp_ids: List[int]) -> Dict[str, Any]:
     driver = make_driver()
