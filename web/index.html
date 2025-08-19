@@ -11,9 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
-    body {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
-    }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
     tbody tr { transition: background-color .12s ease; }
     html:not(.dark) tbody tr:hover { background: #f8fafc; }
     html.dark tbody tr:hover { background: #0f172a; }
@@ -21,49 +19,22 @@
     .sort-indicator svg { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
 
     /* Bookie chips in the Bookies column */
-    .bookie-chip {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      background: rgba(16,185,129,.1);
-      border-radius: 12px; padding: 6px 10px;
-    }
+    .bookie-chip { display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(16,185,129,.1); border-radius:12px; padding:6px 10px; }
     html.dark .bookie-chip { background: rgba(16,185,129,.2); }
-    .bookie-chip .bookie-identity { display:flex; align-items:center; gap:8px; min-width:0; }
-    .bookie-chip img { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; }
-    .bookie-chip .bookie-name {
-      font-weight: 500; color: #065f46;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    html.dark .bookie-chip .bookie-name { color: #d1fae5; }
-    .bookie-chip .bookie-odds { font-weight: 700; min-width: 3.5rem; text-align: right; }
+    .bookie-identity { display:flex; align-items:center; gap:8px; min-width:0; }
+    .bookie-chip img { width:20px; height:20px; border-radius:4px; flex-shrink:0; }
+    .bookie-name { font-weight:500; color:#065f46; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    html.dark .bookie-name { color:#d1fae5; }
+    .bookie-odds { font-weight:700; min-width:3.5rem; text-align:right; }
 
-    /* Select-like trigger for bookies dropdown */
-    .select-like {
-      display:flex; align-items:center; justify-content:space-between; gap:8px;
-      width:100%; padding:10px 12px; border-radius:12px;
-      border:1px solid rgb(203 213 225); /* slate-300 */
-      background: #fff; cursor: pointer;
-    }
-    html.dark .select-like {
-      border-color: rgb(71 85 105); /* slate-600 */
-      background: rgb(30 41 59);    /* slate-800 */
-    }
-    .caret {
-      width: 12px; height: 12px; flex-shrink:0;
-    }
+    /* Select-like trigger for dropdowns */
+    .select-like { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgb(203 213 225); background:#fff; cursor:pointer; }
+    html.dark .select-like { border-color: rgb(71 85 105); background: rgb(30 41 59); }
+    .caret { width:12px; height:12px; flex-shrink:0; }
 
     /* Absolute dropdown panel */
-    .dropdown-panel {
-      position: absolute; top: 100%; right: 0; margin-top: 6px;
-      width: min(520px, 92vw); max-height: 56vh; overflow:auto;
-      z-index: 50;
-      background: #fff; border: 1px solid rgb(203 213 225); border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(2,6,23,.25);
-      padding: 12px;
-    }
-    html.dark .dropdown-panel {
-      background: rgb(15 23 42); /* slate-900 */
-      border-color: rgb(71 85 105); /* slate-600 */
-    }
+    .dropdown-panel { position:absolute; top:100%; right:0; margin-top:6px; width:min(520px,92vw); max-height:56vh; overflow:auto; z-index:50; background:#fff; border:1px solid rgb(203 213 225); border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,.25); padding:12px; }
+    html.dark .dropdown-panel { background:rgb(15 23 42); border-color: rgb(71 85 105); }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
@@ -87,8 +58,7 @@
             <option value="AEST" selected>AEST</option>
           </select>
         </label>
-        <button id="themeToggle"
-          class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <button id="themeToggle" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
           Toggle theme
         </button>
       </div>
@@ -104,21 +74,39 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label for="sport" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Sport</label>
-          <select id="sport" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <option value="">Any</option>
-          </select>
+        <!-- Sport dropdown -->
+        <div id="sportsWrapper" class="relative">
+          <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Sports</label>
+          <div id="sportsDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="sportsSummary" class="truncate">All sports</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="sportsPanel" class="dropdown-panel hidden">
+            <div class="flex items-center gap-3 mb-2">
+              <label class="inline-flex items-center gap-2"><input id="sportsSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
+              <span id="sportsSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
+            </div>
+            <div id="sportsChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+          </div>
         </div>
 
-        <div>
-          <label for="competitionId" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">League (Comp ID)</label>
-          <select id="competitionId" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <option value="">Any</option>
-          </select>
+        <!-- League dropdown -->
+        <div id="leaguesWrapper" class="relative">
+          <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">League (Comp ID)</label>
+          <div id="leaguesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="leaguesSummary" class="truncate">All leagues</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="leaguesPanel" class="dropdown-panel hidden">
+            <div class="flex items-center gap-3 mb-2">
+              <label class="inline-flex items-center gap-2"><input id="leaguesSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
+              <span id="leaguesSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
+            </div>
+            <div id="leaguesChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+          </div>
         </div>
 
-        <!-- Bookies dropdown (overlay) -->
+        <!-- Bookies dropdown -->
         <div id="bookiesWrapper" class="relative">
           <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Bookies</label>
           <div id="bookiesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
@@ -127,16 +115,14 @@
           </div>
           <div id="bookiesPanel" class="dropdown-panel hidden">
             <div class="flex items-center gap-3 mb-2">
-              <label class="inline-flex items-center gap-2">
-                <input id="bookiesSelectAll" type="checkbox" class="rounded">
-                <span>Select all</span>
-              </label>
+              <label class="inline-flex items-center gap-2"><input id="bookiesSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
               <span id="bookiesSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
             </div>
             <div id="bookiesChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
           </div>
         </div>
 
+        <!-- Min ROI -->
         <div>
           <label for="minRoi" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Min ROI (%)</label>
           <div class="flex items-center gap-3">
@@ -166,10 +152,7 @@
         <div class="flex items-center gap-2">
           <button id="resetFilters" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">Reset</button>
           <button id="refresh" class="px-3 py-2 rounded-xl bg-primary hover:bg-blue-700 text-white">Refresh</button>
-          <button id="requestUpdate"
-            class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
-            Request update
-          </button>
+          <button id="requestUpdate" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">Request update</button>
           <span id="updateStatus" class="text-xs text-slate-500 dark:text-slate-400 ml-2"></span>
         </div>
       </div>
@@ -185,7 +168,6 @@
               <th class="px-4 py-3 text-left cursor-pointer" data-sort="sport">Sport</th>
               <th class="px-4 py-3 text-left">Game</th>
               <th class="px-4 py-3 text-left">Market</th>
-              <!-- ROI moved before Bets -->
               <th class="px-4 py-3 text-right cursor-pointer" data-sort="roi">ROI</th>
               <th class="px-4 py-3 text-left">Bets</th>
               <th class="px-4 py-3 text-left">Bookies</th>
@@ -195,7 +177,6 @@
         </table>
       </div>
 
-      <!-- Pagination -->
       <div class="flex items-center justify-between p-3 border-t border-slate-200 dark:border-slate-700">
         <div class="text-xs text-slate-500 dark:text-slate-400"><span id="totalCount">0</span> results</div>
         <div class="flex items-center gap-2">
@@ -203,9 +184,7 @@
           <span class="text-sm tabular-nums"><span id="page">1</span>/<span id="pages">1</span></span>
           <button id="nextPage" class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800">Next</button>
           <select id="pageSize" class="ml-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <option>25</option>
-            <option selected>50</option>
-            <option>100</option>
+            <option>25</option><option selected>50</option><option>100</option>
           </select>
         </div>
       </div>

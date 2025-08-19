@@ -20,15 +20,17 @@ const state = {
   page: 1,
   pageSize: 50,
   filters: {
-    sport: '',
-    competitionId: '',
     dateFrom: '',
     dateTo: '',
     minRoi: 0,
   },
-  tz: localStorage.getItem('tzMode') || 'AEST', // 'auto' or 'AEST'
+  tz: localStorage.getItem('tzMode') || 'AEST',
   selectedBookies: new Set(JSON.parse(localStorage.getItem('bookiesSelected') || '[]')),
-  _agencies: [], // last agencies list from API
+  selectedSports: new Set(JSON.parse(localStorage.getItem('sportsSelected') || '[]')),
+  selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
+  _agencies: [],
+  _sports: [],
+  _leagues: [],
 };
 
 const els = {
@@ -41,8 +43,6 @@ const els = {
   next: document.getElementById('nextPage'),
   pageSize: document.getElementById('pageSize'),
 
-  sport: document.getElementById('sport'),
-  competitionId: document.getElementById('competitionId'),
   dateFrom: document.getElementById('dateFrom'),
   dateTo: document.getElementById('dateTo'),
   minRoi: document.getElementById('minRoi'),
@@ -50,7 +50,7 @@ const els = {
   reset: document.getElementById('resetFilters'),
   refresh: document.getElementById('refresh'),
 
-  // Bookies dropdown UI
+  // Dropdown clusters
   bookiesWrapper: document.getElementById('bookiesWrapper'),
   bookiesDropdown: document.getElementById('bookiesDropdown'),
   bookiesSummary: document.getElementById('bookiesSummary'),
@@ -58,6 +58,22 @@ const els = {
   bookiesChkWrap: document.getElementById('bookiesChkWrap'),
   bookiesSelectAll: document.getElementById('bookiesSelectAll'),
   bookiesSelectedCount: document.getElementById('bookiesSelectedCount'),
+
+  sportsWrapper: document.getElementById('sportsWrapper'),
+  sportsDropdown: document.getElementById('sportsDropdown'),
+  sportsSummary: document.getElementById('sportsSummary'),
+  sportsPanel: document.getElementById('sportsPanel'),
+  sportsChkWrap: document.getElementById('sportsChkWrap'),
+  sportsSelectAll: document.getElementById('sportsSelectAll'),
+  sportsSelectedCount: document.getElementById('sportsSelectedCount'),
+
+  leaguesWrapper: document.getElementById('leaguesWrapper'),
+  leaguesDropdown: document.getElementById('leaguesDropdown'),
+  leaguesSummary: document.getElementById('leaguesSummary'),
+  leaguesPanel: document.getElementById('leaguesPanel'),
+  leaguesChkWrap: document.getElementById('leaguesChkWrap'),
+  leaguesSelectAll: document.getElementById('leaguesSelectAll'),
+  leaguesSelectedCount: document.getElementById('leaguesSelectedCount'),
 
   tzSelect: document.getElementById('tzSelect'),
 };
@@ -72,15 +88,22 @@ function qs() {
     ...state.filters,
   };
 
-  // Bookies filter: send CSV only when user picked a strict subset.
-  if (state.selectedBookies.size > 0 && state._agencies.length && state.selectedBookies.size < state._agencies.length) {
-    params.bookies = [...state.selectedBookies].join(',');
-  }
+  // Multi filters as CSV (only when strict subset)
+  const addCsv = (set, fullArr, key) => {
+    if (!fullArr.length) return;
+    if (set.size > 0 && set.size < fullArr.length) {
+      params[key] = [...set].join(',');
+    }
+  };
+
+  addCsv(state.selectedBookies, state._agencies, 'bookies');
+  addCsv(state.selectedSports, state._sports, 'sports');
+  addCsv(state.selectedLeagues, state._leagues, 'competitionIds');
 
   return new URLSearchParams(params).toString();
 }
 
-// --- Sort indicators (tiny SVGs) ---
+// --- Sort indicators ---
 const ICONS = {
   both: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 4l3-3 3 3H3zm6 4l-3 3-3-3h6z" fill="currentColor"/></svg>',
   up:   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 7l3-3 3 3H3z" fill="currentColor"/></svg>',
@@ -117,7 +140,7 @@ function agencySlug(name) {
 }
 function logoFor(name) {
   const slug = agencySlug(name);
-  return `/images/${slug}.jpeg`; // adjust to your actual image extensions
+  return `/images/${slug}.png`;
 }
 
 // --- Date/time formatting ---
@@ -130,11 +153,11 @@ function fmtWithTZ(iso) {
   try { return fmt.format(new Date(iso)); } catch { return iso; }
 }
 
-// --- Render Bookies column (best chips) ---
+// --- Bookies chips ---
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
   const left  = bookTable.best.left  || {};
-  theRight = bookTable.best.right || {};
+  const right = bookTable.best.right || {};
   const chip = (agencyRaw, odds) => {
     const agency = cleanAgencyName(agencyRaw || '');
     if (!agency || odds == null) return '';
@@ -148,10 +171,10 @@ function renderBestChips(bookTable) {
         <span class="bookie-odds tabular-nums">${oddsTxt}</span>
       </div>`;
   };
-  return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(theRight.agency, theRight.odds)}</div>`;
+  return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(right.agency, right.odds)}</div>`;
 }
 
-// --- Full book table (expanded row) ---
+// --- Expanded odds table ---
 function renderFullBookTable(it) {
   const t = it.book_table;
   if (!t) return '';
@@ -201,107 +224,82 @@ function isInteractive(el) {
   return !!el.closest('a, button, input, select, label, textarea, summary');
 }
 
-// --- Bookies checkbox UI ---
-function renderBookiesCheckboxes(agencies) {
-  state._agencies = agencies.slice();
-  const wrap = els.bookiesChkWrap;
-  wrap.innerHTML = '';
+// --- Generic checkbox panel renderer ---
+function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
+  wrapEl.innerHTML = '';
+  const treatAllSelected = selectedSet.size === 0 || selectedSet.size >= items.length;
 
-  // Determine default: "all selected" if user has no explicit subset saved
-  const selected = state.selectedBookies;
-  const treatAllSelected = selected.size === 0 || selected.size >= agencies.length;
-
-  agencies.forEach(a => {
-    const id = `bk-${agencySlug(a)}`;
-    const checked = treatAllSelected ? true : selected.has(a);
+  items.forEach(v => {
+    const id = `${allKey}-${v.toString().replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
+    const checked = treatAllSelected ? true : selectedSet.has(v);
     const row = document.createElement('label');
-    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100";
-    row.innerHTML = `
-      <input type="checkbox" id="${id}" class="rounded" ${checked ? 'checked' : ''} data-agency="${a}">
-      <span class="truncate">${a}</span>
-    `;
-    wrap.appendChild(row);
+    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
+    row.innerHTML = `<input type="checkbox" id="${id}" class="rounded" ${checked ? 'checked' : ''} data-val="${v}"><span class="truncate">${v}</span>`;
+    wrapEl.appendChild(row);
   });
 
-  // Select all checkbox state
-  els.bookiesSelectAll.checked = treatAllSelected;
-  updateBookiesSelectedSummary();
+  // Select all state
+  selectAllEl.checked = treatAllSelected;
 
-  // Change listeners
-  wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+  wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
-      const a = cb.getAttribute('data-agency');
-      if (cb.checked) state.selectedBookies.add(a);
-      else state.selectedBookies.delete(a);
-
-      // If everything is checked, collapse to "no filter"
-      if (state.selectedBookies.size >= agencies.length) {
-        state.selectedBookies = new Set(); // means "no filter"
-        wrap.querySelectorAll('input[type="checkbox"]').forEach(x => x.checked = true);
-        els.bookiesSelectAll.checked = true;
+      const val = cb.getAttribute('data-val');
+      if (cb.checked) selectedSet.add(val);
+      else selectedSet.delete(val);
+      if (selectedSet.size >= items.length) {
+        selectedSet.clear(); // collapse to "no filter"
+        wrapEl.querySelectorAll('input[type="checkbox"]').forEach(x => x.checked = true);
+        selectAllEl.checked = true;
       } else {
-        els.bookiesSelectAll.checked = false;
+        selectAllEl.checked = false;
       }
-
-      localStorage.setItem('bookiesSelected', JSON.stringify([...state.selectedBookies]));
-      updateBookiesSelectedSummary();
-      fetchData();
+      onChange();
     });
   });
 
-  // Select all toggler
-  els.bookiesSelectAll.onchange = () => {
-    if (els.bookiesSelectAll.checked) {
-      // All selected -> clear explicit list and tick everything
-      state.selectedBookies = new Set();
-      wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  selectAllEl.onchange = () => {
+    if (selectAllEl.checked) {
+      selectedSet.clear();
+      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
-      // None selected -> untick everything (still treat as "no filter" unless user picks a subset)
-      state.selectedBookies = new Set();
-      wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      selectedSet.clear();
+      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     }
-    localStorage.setItem('bookiesSelected', JSON.stringify([...state.selectedBookies]));
-    updateBookiesSelectedSummary();
-    fetchData();
+    onChange();
   };
 }
 
-function updateBookiesSelectedSummary() {
-  let text = 'All bookies';
-  if (state.selectedBookies.size > 0 && state._agencies.length && state.selectedBookies.size < state._agencies.length) {
-    text = `${state.selectedBookies.size} selected`;
+// --- Summaries
+function updateSummaryText(set, fullArr, el, labelAll) {
+  let text = labelAll;
+  if (set.size > 0 && fullArr.length && set.size < fullArr.length) {
+    text = `${set.size} selected`;
   }
-  els.bookiesSummary.textContent = text;
-  els.bookiesSelectedCount.textContent = text.replace(' bookies','');
+  el.textContent = text;
 }
 
-// --- Open/close dropdown (overlay) ---
-function openBookiesDropdown() {
-  els.bookiesPanel.classList.remove('hidden');
-  els.bookiesDropdown.setAttribute('aria-expanded', 'true');
+// --- Open/close dropdown helpers ---
+function wireDropdown(wrapper, trigger, panel) {
+  function open() { panel.classList.remove('hidden'); trigger.setAttribute('aria-expanded','true'); }
+  function close(){ panel.classList.add('hidden'); trigger.setAttribute('aria-expanded','false'); }
+  trigger.addEventListener('click', () => {
+    if (panel.classList.contains('hidden')) open(); else close();
+  });
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.click(); }
+    if (e.key === 'Escape') close();
+  });
+  document.addEventListener('click', (e) => { if (!wrapper.contains(e.target)) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 }
-function closeBookiesDropdown() {
-  els.bookiesPanel.classList.add('hidden');
-  els.bookiesDropdown.setAttribute('aria-expanded', 'false');
-}
-els.bookiesDropdown?.addEventListener('click', (e) => {
-  const isOpen = !els.bookiesPanel.classList.contains('hidden');
-  if (isOpen) closeBookiesDropdown(); else openBookiesDropdown();
-});
-els.bookiesDropdown?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.bookiesDropdown.click(); }
-  if (e.key === 'Escape') closeBookiesDropdown();
-});
-document.addEventListener('click', (e) => {
-  if (!els.bookiesWrapper.contains(e.target)) closeBookiesDropdown();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeBookiesDropdown();
-});
+
+// Wire all three dropdowns
+wireDropdown(els.bookiesWrapper, els.bookiesDropdown, els.bookiesPanel);
+wireDropdown(els.sportsWrapper,  els.sportsDropdown,  els.sportsPanel);
+wireDropdown(els.leaguesWrapper, els.leaguesDropdown, els.leaguesPanel);
 
 // --- Fetch + render ---
 async function fetchData() {
-  // sync tz UI
   if (els.tzSelect) els.tzSelect.value = state.tz;
 
   const res = await fetch(`/api/opportunities?${qs()}`);
@@ -315,41 +313,86 @@ async function fetchData() {
   els.prev.disabled = page <= 1;
   els.next.disabled = page >= pages;
 
-  // Populate sport/competition once
-  if (els.sport.options.length === 1) {
-    (sports || []).forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; els.sport.appendChild(o); });
+  // Render sports panel
+  const spNow = JSON.stringify(sports || []);
+  const spPrev = JSON.stringify(state._sports || []);
+  if (spNow !== spPrev) {
+    state._sports = (sports || []).slice().sort((a,b)=>(a||'').localeCompare(b||''));
+    renderCheckboxPanel({
+      items: state._sports,
+      wrapEl: els.sportsChkWrap,
+      selectAllEl: els.sportsSelectAll,
+      selectedSet: state.selectedSports,
+      allKey: 'sport',
+      onChange: () => {
+        localStorage.setItem('sportsSelected', JSON.stringify([...state.selectedSports]));
+        updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
+        updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
+        state.page = 1; fetchData();
+      }
+    });
   }
-  if (els.competitionId.options.length === 1) {
-    (competitionIds || []).forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = id; els.competitionId.appendChild(o); });
-  }
+  updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
+  updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Render bookies checkbox panel (once or when list changes)
-  const agStrNow = JSON.stringify(agencies || []);
-  const agStrPrev = JSON.stringify(state._agencies || []);
-  if (agStrNow !== agStrPrev) {
-    renderBookiesCheckboxes(agencies || []);
-  } else {
-    updateBookiesSelectedSummary();
+  // Render leagues panel
+  const lgNow = JSON.stringify(competitionIds || []);
+  const lgPrev = JSON.stringify(state._leagues || []);
+  if (lgNow !== lgPrev) {
+    state._leagues = (competitionIds || []).slice().map(x => String(x));
+    renderCheckboxPanel({
+      items: state._leagues,
+      wrapEl: els.leaguesChkWrap,
+      selectAllEl: els.leaguesSelectAll,
+      selectedSet: state.selectedLeagues,
+      allKey: 'league',
+      onChange: () => {
+        localStorage.setItem('leaguesSelected', JSON.stringify([...state.selectedLeagues]));
+        updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
+        updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSelectedCount, 'All');
+        state.page = 1; fetchData();
+      }
+    });
   }
+  updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
+  updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSelectedCount, 'All');
 
-  // Table rows
+  // Render bookies panel
+  const agNow = JSON.stringify(agencies || []);
+  const agPrev = JSON.stringify(state._agencies || []);
+  if (agNow !== agPrev) {
+    state._agencies = (agencies || []).slice();
+    renderCheckboxPanel({
+      items: state._agencies,
+      wrapEl: els.bookiesChkWrap,
+      selectAllEl: els.bookiesSelectAll,
+      selectedSet: state.selectedBookies,
+      allKey: 'bookie',
+      onChange: () => {
+        localStorage.setItem('bookiesSelected', JSON.stringify([...state.selectedBookies]));
+        updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSummary, 'All bookies');
+        updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSelectedCount, 'All');
+        state.page = 1; fetchData();
+      }
+    });
+  }
+  updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSummary, 'All bookies');
+  updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSelectedCount, 'All');
+
+  // Rows
   els.tbody.innerHTML = '';
   const frag = document.createDocumentFragment();
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50';
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
 
-    // Bookies cell
-    let bookiesCell = '';
-    if (it.book_table) bookiesCell = renderBestChips(it.book_table);
-    else bookiesCell = `<span class="text-slate-400">—</span>`;
+    let bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
 
-    // NOTE: ROI column moved BEFORE Bets, so Bets sits next to Bookies
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
@@ -367,7 +410,6 @@ async function fetchData() {
 
     frag.appendChild(tr);
 
-    // Details row (odds table)
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
@@ -391,45 +433,48 @@ async function fetchData() {
   renderSortIndicators();
 }
 
-function updateAndFetch() {
-  state.page = 1;
-  fetchData();
-}
+function updateAndFetch() { state.page = 1; fetchData(); }
 
-// events (filters, paging, sorting)
-['sport','competitionId','dateFrom','dateTo'].forEach(id => {
+// Date filter handlers
+['dateFrom','dateTo'].forEach(id => {
   const el = els[id];
   if (!el) return;
-  el.addEventListener('change', () => {
-    state.filters[id] = el.value;
-    updateAndFetch();
-  });
+  el.addEventListener('change', () => { state.filters[id] = el.value; updateAndFetch(); });
 });
 
-els.minRoi?.addEventListener('input', () => {
-  els.minRoiValue.textContent = Number(els.minRoi.value).toFixed(1);
-});
-els.minRoi?.addEventListener('change', () => {
-  state.filters.minRoi = els.minRoi.value;
-  updateAndFetch();
-});
+els.minRoi?.addEventListener('input', () => { els.minRoiValue.textContent = Number(els.minRoi.value).toFixed(1); });
+els.minRoi?.addEventListener('change', () => { state.filters.minRoi = els.minRoi.value; updateAndFetch(); });
 
-els.pageSize?.addEventListener('change', () => {
-  state.pageSize = Number(els.pageSize.value);
-  state.page = 1; fetchData();
-});
-
+els.pageSize?.addEventListener('change', () => { state.pageSize = Number(els.pageSize.value); state.page = 1; fetchData(); });
 els.prev?.addEventListener('click', () => { if (state.page > 1) { state.page--; fetchData(); } });
 els.next?.addEventListener('click', () => { state.page++; fetchData(); });
 
 els.reset?.addEventListener('click', () => {
-  state.filters = { sport: '', competitionId: '', dateFrom: '', dateTo: '', minRoi: 0 };
-  els.sport.value = els.competitionId.value = els.dateFrom.value = els.dateTo.value = '';
+  state.filters = { dateFrom: '', dateTo: '', minRoi: 0 };
+  els.dateFrom.value = els.dateTo.value = '';
   els.minRoi.value = 0; els.minRoiValue.textContent = '0.0';
-  // Reset bookies: clear explicit list (means "no filter")
-  state.selectedBookies = new Set();
-  localStorage.removeItem('bookiesSelected');
-  renderBookiesCheckboxes(state._agencies || []);
+
+  state.selectedBookies.clear(); localStorage.removeItem('bookiesSelected');
+  state.selectedSports.clear();  localStorage.removeItem('sportsSelected');
+  state.selectedLeagues.clear(); localStorage.removeItem('leaguesSelected');
+
+  // Rerender panels to reflect "All"
+  renderCheckboxPanel({
+    items: state._sports, wrapEl: els.sportsChkWrap, selectAllEl: els.sportsSelectAll,
+    selectedSet: state.selectedSports, allKey: 'sport', onChange: ()=>{}
+  });
+  renderCheckboxPanel({
+    items: state._leagues, wrapEl: els.leaguesChkWrap, selectAllEl: els.leaguesSelectAll,
+    selectedSet: state.selectedLeagues, allKey: 'league', onChange: ()=>{}
+  });
+  renderCheckboxPanel({
+    items: state._agencies, wrapEl: els.bookiesChkWrap, selectAllEl: els.bookiesSelectAll,
+    selectedSet: state.selectedBookies, allKey: 'bookie', onChange: ()=>{}
+  });
+  updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
+  updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
+  updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSummary, 'All bookies');
+
   updateAndFetch();
 });
 
