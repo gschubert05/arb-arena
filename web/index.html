@@ -17,31 +17,6 @@
     html.dark tbody tr:hover { background: #0f172a; }
     thead th[data-sort]::after { content: none !important; }
     .sort-indicator svg { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
-    .bookie-chip {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 6px;
-      background-color: #0d2b1e; /* same greeny background you had */
-      border-radius: 6px;
-      padding: 4px 8px;
-      min-width: 120px; /* ensures some consistency */
-    }
-
-    .bookie-chip .bookie-name {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .bookie-chip .bookie-odds {
-      font-weight: 600;
-      min-width: 40px;      /* <- fixed column for odds */
-      text-align: right;
-    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
@@ -54,10 +29,17 @@
           <p class="text-sm text-slate-500 dark:text-slate-400">Free live arbitrage finder</p>
         </div>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-4">
         <div class="text-sm text-slate-500 dark:text-slate-400">
           Last updated: <span id="lastUpdated">—</span>
         </div>
+        <label class="text-sm text-slate-600 dark:text-slate-300">
+          Timezone
+          <select id="tzSelect" class="ml-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <option value="auto">Auto (Local)</option>
+            <option value="AEST" selected>AEST</option>
+          </select>
+        </label>
         <button id="themeToggle"
           class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
           Toggle theme
@@ -82,20 +64,17 @@
           </select>
         </div>
         <div>
-          <label for="competitionId" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Competition ID</label>
+          <label for="competitionId" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">League (Comp ID)</label>
           <select id="competitionId" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary">
             <option value="">Any</option>
           </select>
         </div>
-        <div class="flex gap-2">
-          <div class="flex-1">
-            <label for="dateFrom" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">From</label>
-            <input id="dateFrom" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary" />
+        <div>
+          <label for="bookies" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Bookies</label>
+          <div class="flex items-start gap-2">
+            <button id="bookiesAll" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600">Select all</button>
           </div>
-          <div class="flex-1">
-            <label for="dateTo" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">To</label>
-            <input id="dateTo" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary" />
-          </div>
+          <select id="bookies" multiple size="6" class="mt-2 w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"></select>
         </div>
         <div>
           <label for="minRoi" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Min ROI (%)</label>
@@ -105,6 +84,22 @@
           </div>
         </div>
       </div>
+
+      <details class="mt-4">
+        <summary class="cursor-pointer text-sm text-slate-600 dark:text-slate-300">More filters</summary>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label for="dateFrom" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">From</label>
+              <input id="dateFrom" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary" />
+            </div>
+            <div class="flex-1">
+              <label for="dateTo" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">To</label>
+              <input id="dateTo" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary" />
+            </div>
+          </div>
+        </div>
+      </details>
 
       <div class="mt-4 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2">
@@ -125,14 +120,13 @@
         <table class="min-w-full text-sm">
           <thead class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 sticky top-0 z-10">
             <tr>
-              <th class="px-4 py-3 text-left cursor-pointer" data-sort="dateISO">Date</th>
+              <th class="px-4 py-3 text-left cursor-pointer" data-sort="kickoff">Date</th>
               <th class="px-4 py-3 text-left cursor-pointer" data-sort="sport">Sport</th>
               <th class="px-4 py-3 text-left">Game</th>
               <th class="px-4 py-3 text-left">Market</th>
-              <th class="px-4 py-3 text-left">Line</th>
+              <th class="px-4 py-3 text-left">Bets</th>
               <th class="px-4 py-3 text-right cursor-pointer" data-sort="roi">ROI</th>
               <th class="px-4 py-3 text-left">Bookies</th>
-              <th class="px-4 py-3 text-right">Details</th>
             </tr>
           </thead>
           <tbody id="tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
@@ -155,8 +149,6 @@
       </div>
     </section>
   </main>
-
-  <!-- (Optional) Keep intro modal for now; you can remove later since we no longer need to send users off-site. -->
 
   <script src="/app.js" defer></script>
 </body>

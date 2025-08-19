@@ -44,6 +44,7 @@ jobs:
           chrome-version: stable
           install-dependencies: true
           install-chromedriver: true
+
       - name: Export CHROME_BIN
         run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
 
@@ -58,7 +59,7 @@ jobs:
           mkdir -p server/data
           curl -fsSL "$RAW_ACTIVE_URL" -o server/data/active_comp_ids.json || echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
           COMP_IDS=$(python - <<'PY'
-          import json,sys
+          import json
           try:
               d=json.load(open("server/data/active_comp_ids.json","r",encoding="utf-8"))
               ids=d.get("active_comp_ids",[])
@@ -70,7 +71,7 @@ jobs:
           echo "COMP_IDS=${COMP_IDS}" >> $GITHUB_ENV
           echo "Loaded COMP_IDS=${COMP_IDS}"
 
-      # Run your existing scraper (single fast feed)
+      # Run your scraper (enriches with book_table.best)
       - name: Run scraper (FAST set)
         env:
           # Prefer discovered IDs; else use repo variable; else fallback
@@ -83,8 +84,8 @@ jobs:
           curl -fsSL "$RAW_JSON_URL" -o prev.json || echo "{}" > prev.json
           curl -fsSL "$RAW_SEEN_URL" -o seen_keys.json || echo "[]" > seen_keys.json
 
-      # Diff, notify, and update seen_keys.json
-      - name: Compute new arbs and notify
+      # ✅ New: Compact Telegram/Discord message with JUST bookies + odds + ROI (no URLs)
+      - name: Compute new arbs and notify (bookies, odds, ROI only)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -92,7 +93,7 @@ jobs:
           ROI_THRESHOLD_PCT:  ${{ env.ROI_THRESHOLD_PCT }}
         run: |
           python - << 'PY'
-          import json, os, sys, textwrap, urllib.parse, subprocess
+          import json, os, subprocess
 
           ROI_THRESHOLD_PCT = float(os.environ.get("ROI_THRESHOLD_PCT","2.0"))
           THRESH = ROI_THRESHOLD_PCT / 100.0
@@ -107,88 +108,91 @@ jobs:
           cur = load_json("server/data/opportunities.json", {"items":[]})
           if isinstance(cur, list):
               cur = {"items": cur}
-          cur_items = cur.get("items", [])
+          items = cur.get("items", [])
 
           seen = load_json("seen_keys.json", [])
           seen_set = set(seen if isinstance(seen, list) else [])
 
           def key(it):
-              def norm(x): return (x or "").strip().lower()
+              def n(x): return (x or "").strip().lower()
               return "|".join([
                   str(it.get("competitionid") or it.get("competitionId") or ""),
-                  norm(it.get("sport")),
-                  norm(it.get("game")),
-                  norm(it.get("market")),
-                  norm(it.get("match")),
+                  n(it.get("sport")), n(it.get("game")),
+                  n(it.get("market")), n(it.get("match")),
                   it.get("dateISO") or it.get("date") or ""
               ])
 
-          # find new hits above threshold
           new_hits = []
-          for it in cur_items:
-              roi = it.get("roi") or 0
-              try: roi = float(roi)
-              except: roi = 0.0
-              if roi >= THRESH:
-                  k = key(it)
-                  if k not in seen_set:
-                      new_hits.append(it)
-                      seen_set.add(k)
+          for it in items:
+              try:
+                  roi = float(it.get("roi") or 0.0)
+              except:
+                  roi = 0.0
+              if roi < THRESH:
+                  continue
+
+              best = (it.get("book_table") or {}).get("best") or {}
+              L = best.get("left")  or {}
+              R = best.get("right") or {}
+              # Need agencies AND odds to format the compact message
+              if not (L.get("agency") and R.get("agency") and L.get("odds") and R.get("odds")):
+                  continue
+
+              k = key(it)
+              if k in seen_set:
+                  continue
+              new_hits.append(it)
+              seen_set.add(k)
 
           # Save updated seen_keys
           with open("seen_keys.json", "w", encoding="utf-8") as f:
               json.dump(sorted(list(seen_set)), f, ensure_ascii=False, indent=0)
 
-          # Prepare message (cap to 8 lines to avoid spam)
-          if new_hits:
-              new_hits.sort(key=lambda x: float(x.get('roi') or 0), reverse=True)
-              lines = []
-              for it in new_hits[:8]:
-                  roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
-                  sport = it.get("sport") or ""
-                  game  = it.get("game")  or ""
-                  market= it.get("market") or ""
-                  line  = it.get("match") or ""
-                  url   = it.get("url") or ""
-                  line_txt = f"{sport} • {game}\n{market} — {line}\nROI: {roi_pct}\n{url}"
-                  lines.append(line_txt)
-              msg = "New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(lines)
-              with open("msg.txt","w",encoding="utf-8") as f: f.write(msg)
+          if not new_hits:
+              raise SystemExit(0)
 
-              # Telegram
-              tok = os.environ.get("TELEGRAM_BOT_TOKEN")
-              chat= os.environ.get("TELEGRAM_CHAT_ID")
-              if tok and chat:
-                  api = f"https://api.telegram.org/bot{tok}/sendMessage"
-                  subprocess.run([
-                      "curl","-fsS","-X","POST",api,
-                      "-d", f"chat_id={chat}",
-                      "-d", "parse_mode=HTML",
-                      "--data-urlencode","disable_web_page_preview=true",
-                      "--data-urlencode", f"text={msg}"
-                  ], check=False)
+          new_hits.sort(key=lambda x: float(x.get('roi') or 0), reverse=True)
 
-              # Discord
-              wh = os.environ.get("DISCORD_WEBHOOK_URL")
-              if wh:
-                  payload = json.dumps({"content": msg})
-                  subprocess.run([
-                      "curl","-fsS","-H","Content-Type: application/json",
-                      "-d", payload, wh
-                  ], check=False)
-          else:
-              # nothing new; no notification
-              pass
+          # Build compact lines: "<BookieA> @ X.XX\n<BookieB> @ Y.YY\nROI: Z.ZZ%"
+          def fmt(it):
+              best = it["book_table"]["best"]
+              L, R = best["left"], best["right"]
+              roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
+              return f"{L['agency']} @ {float(L['odds']):.2f}\n{R['agency']} @ {float(R['odds']):.2f}\nROI: {roi_pct}"
+
+          lines = [fmt(it) for it in new_hits[:8]]
+          msg = "New arbs ≥ " + str(ROI_THRESHOLD_PCT) + "%\n\n" + "\n\n".join(lines)
+          open("msg.txt","w",encoding="utf-8").write(msg)
+
+          # Telegram
+          tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+          chat= os.environ.get("TELEGRAM_CHAT_ID")
+          if tok and chat:
+              api = f"https://api.telegram.org/bot{tok}/sendMessage"
+              subprocess.run([
+                  "curl","-fsS","-X","POST",api,
+                  "-d", f"chat_id={chat}",
+                  "--data-urlencode","disable_web_page_preview=true",
+                  "--data-urlencode", f"text={msg}"
+              ], check=False)
+
+          # Discord (optional)
+          wh = os.environ.get("DISCORD_WEBHOOK_URL")
+          if wh:
+              payload = json.dumps({"content": msg})
+              subprocess.run([
+                  "curl","-fsS","-H","Content-Type: application/json",
+                  "-d", payload, wh
+              ], check=False)
           PY
 
       - name: Place seen_keys.json where we commit it from
         run: |
           mkdir -p server/data
-          # if the previous step didn’t produce it (shouldn’t happen), create an empty set
           test -f seen_keys.json || echo "[]" > seen_keys.json
           mv -f seen_keys.json server/data/seen_keys.json
 
-      # Publish both the JSON and the updated seen_keys.json (and active IDs if present) to data branch
+      # Publish JSON + seen_keys (and active IDs if present) to data branch
       - name: Publish JSON + seen_keys to data branch
         run: |
           git config user.name "github-actions"
@@ -198,7 +202,6 @@ jobs:
           mkdir -p server/data
           git add -f "$PUBLISH_JSON_PATH"
           git add -f "$SEEN_KEYS_PATH"
-          # Keep publishing the known-good list so scraper runs always have something to load
           test -f server/data/active_comp_ids.json && git add -f server/data/active_comp_ids.json || true
           git commit -m "fast: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data --force

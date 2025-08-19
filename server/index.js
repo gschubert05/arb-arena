@@ -32,8 +32,8 @@ let lastManualTs = 0; // simple cooldown
 const COOLDOWN_MS = (Number(process.env.REQUEST_COOLDOWN_SEC) || 180) * 1000;
 
 async function loadData() {
-  // If DATA_URL not set, read local file (dev)
-  if (!DATA_URL) {
+  // If DATA_URL is explicitly "", read local file (dev)
+  if (DATA_URL === "") {
     try {
       const raw = await fs.readFile(DATA_FILE, 'utf8');
       const parsed = JSON.parse(raw);
@@ -43,7 +43,7 @@ async function loadData() {
     }
   }
   const now = Date.now();
-  if (now - cache.ts < 60_000) return cache.data; // cache 60s
+  if (now - cache.ts < 60_000 && cache.data) return cache.data; // cache 60s
 
   const resp = await fetch(DATA_URL, { cache: 'no-store' });
   const json = await resp.json();
@@ -52,7 +52,7 @@ async function loadData() {
   return normalized;
 }
 
-// --- Date fallback: coerce "Sun 17 Aug 16:40" -> "YYYY-MM-DD" (current year) ---
+// --- Date helpers ---
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
 function coerceISO(dstr) {
   if (typeof dstr !== 'string') return null;
@@ -68,8 +68,34 @@ function coerceISO(dstr) {
   const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
+// Full kickoff ISO (assume source times are UTC, e.g., 'Sun 17 Aug 16:40')
+function coerceKickoffISO(dstr) {
+  if (typeof dstr !== 'string') return null;
+  const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const mon = MONTHS[m[2].toLowerCase()];
+  const hh = parseInt(m[3], 10);
+  const mi = parseInt(m[4], 10);
+  if (mon == null) return null;
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), mon, day, hh, mi, 0));
+  return d.toISOString();
+}
 
-app.use(express.static(WEB_DIR));
+// agency cleaner (mirror of client)
+function cleanAgency(name) {
+  if (!name) return '';
+  let out = String(name).split('(')[0];
+  out = out.split('-')[0];
+  return out.trim();
+}
+
+app.use(express.static(WEB_DIR, {
+  etag: true,
+  lastModified: true,
+  cacheControl: false,
+}));
 
 app.get('/api/opportunities', async (req, res) => {
   const {
@@ -81,16 +107,21 @@ app.get('/api/opportunities', async (req, res) => {
     sortBy = 'roi',
     sortDir = 'desc',
     page = '1',
-    pageSize = '50'
+    pageSize = '50',
+    bookies = '', // CSV of agency names (cleaned)
   } = req.query;
 
   const { lastUpdated, items } = await loadData();
 
-  // derive dateISO if missing
+  // derive dateISO & kickoff if missing
   for (const it of items) {
     if (!it.dateISO && it.date) {
       const iso = coerceISO(it.date);
       if (iso) it.dateISO = iso;
+    }
+    if (!it.kickoff && it.date) {
+      const k = coerceKickoffISO(it.date);
+      if (k) it.kickoff = k; // ISO with Z
     }
   }
 
@@ -99,6 +130,13 @@ app.get('/api/opportunities', async (req, res) => {
   const p = Math.max(1, Number(page) || 1);
   const ps = Math.min(500, Math.max(1, Number(pageSize) || 50));
 
+  // Parse bookie filter
+  const bookSet = new Set(
+    (bookies ? String(bookies).split(',') : [])
+      .map(s => cleanAgency(s).toLowerCase())
+      .filter(Boolean)
+  );
+
   // filter
   let filtered = items.filter(it => {
     const roiOk = (Number(it.roi) || 0) >= mRoi / 100;
@@ -106,7 +144,15 @@ app.get('/api/opportunities', async (req, res) => {
     const compOk = !competitionId || String(it.competitionid || it.competitionId) === String(competitionId);
     const dfOk = !dateFrom || (it.dateISO && it.dateISO >= dateFrom);
     const dtOk = !dateTo || (it.dateISO && it.dateISO <= dateTo);
-    return roiOk && sportOk && compOk && dfOk && dtOk;
+
+    let bookOk = true;
+    if (bookSet.size > 0) {
+      const leftA = cleanAgency(it.book_table?.best?.left?.agency || '').toLowerCase();
+      const rightA = cleanAgency(it.book_table?.best?.right?.agency || '').toLowerCase();
+      bookOk = !!(leftA && rightA && bookSet.has(leftA) && bookSet.has(rightA));
+    }
+
+    return roiOk && sportOk && compOk && dfOk && dtOk && bookOk;
   });
 
   // sort
@@ -114,6 +160,7 @@ app.get('/api/opportunities', async (req, res) => {
   const key = (a) => {
     switch (sortBy) {
       case 'dateISO': return a.dateISO || '';
+      case 'kickoff': return a.kickoff || '';
       case 'sport': return (a.sport || '').toLowerCase();
       case 'roi': default: return Number(a.roi) || 0;
     }
@@ -130,7 +177,17 @@ app.get('/api/opportunities', async (req, res) => {
   const sports = [...new Set(items.map(i => i.sport).filter(Boolean))].sort();
   const competitionIds = [...new Set(items.map(i => i.competitionid || i.competitionId).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
 
-  res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports, competitionIds });
+  // agencies from best pairs
+  const agenciesSet = new Set();
+  for (const it of items) {
+    const l = cleanAgency(it.book_table?.best?.left?.agency || '');
+    const r = cleanAgency(it.book_table?.best?.right?.agency || '');
+    if (l) agenciesSet.add(l);
+    if (r) agenciesSet.add(r);
+  }
+  const agencies = [...agenciesSet].sort((a,b)=>a.localeCompare(b));
+
+  res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports, competitionIds, agencies });
 });
 
 app.post('/api/trigger-scrape', express.json(), async (req, res) => {
@@ -152,7 +209,7 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ ref: 'main' }) // or another branch if you deploy from a different branch
+      body: JSON.stringify({ ref: 'main' })
     });
 
     if (!resp.ok) {

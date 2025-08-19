@@ -1,4 +1,4 @@
-// --- Dark mode, intro modal, state, utils remain the same ---
+// --- Theme toggle ---
 (() => {
   const root = document.documentElement;
   const saved = localStorage.getItem('theme');
@@ -13,6 +13,7 @@
   });
 })();
 
+// --- Intro modal (unchanged) ---
 (() => {
   const modal = document.getElementById('introModal');
   if (!modal) return;
@@ -45,7 +46,16 @@ const state = {
   sortDir: 'desc',
   page: 1,
   pageSize: 50,
-  filters: { sport: '', competitionId: '', dateFrom: '', dateTo: '', minRoi: 0 },
+  filters: {
+    sport: '',
+    competitionId: '',
+    dateFrom: '',
+    dateTo: '',
+    minRoi: 0,
+    bookies: [], // array of cleaned agency names
+  },
+  tz: localStorage.getItem('tzMode') || 'AEST', // 'auto' or 'AEST'
+  selectedBookies: new Set(JSON.parse(localStorage.getItem('bookiesSelected') || '[]')),
 };
 
 const els = {
@@ -57,6 +67,7 @@ const els = {
   prev: document.getElementById('prevPage'),
   next: document.getElementById('nextPage'),
   pageSize: document.getElementById('pageSize'),
+
   sport: document.getElementById('sport'),
   competitionId: document.getElementById('competitionId'),
   dateFrom: document.getElementById('dateFrom'),
@@ -65,6 +76,11 @@ const els = {
   minRoiValue: document.getElementById('minRoiValue'),
   reset: document.getElementById('resetFilters'),
   refresh: document.getElementById('refresh'),
+
+  bookies: document.getElementById('bookies'),
+  bookiesAll: document.getElementById('bookiesAll'),
+
+  tzSelect: document.getElementById('tzSelect'),
 };
 
 // --- Utility: build querystring from state ---
@@ -75,6 +91,7 @@ function qs(params) {
     sortBy: state.sortBy,
     sortDir: state.sortDir,
     ...state.filters,
+    bookies: (state.filters.bookies || []).join(','),
     ...params,
   });
   return usp.toString();
@@ -111,23 +128,26 @@ function renderSortIndicators() {
 // --- Name cleaning + logos ---
 function cleanAgencyName(name) {
   if (!name) return '';
-  // remove text after "(" and after "-"
-  let out = name.split('(')[0];
+  let out = String(name).split('(')[0];
   out = out.split('-')[0];
   return out.trim();
 }
-
 function agencySlug(name) {
-  return cleanAgencyName(name)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')   // replace spaces/symbols with hyphens
-    .replace(/(^-|-$)/g, '');      // trim leading/trailing hyphens
+  return cleanAgencyName(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
-
 function logoFor(name) {
   const slug = agencySlug(name);
-  // point to your local images folder
-  return `/images/${slug}.jpeg`; // or .jpg if that’s the format you saved
+  return `/images/${slug}.png`; // or .jpg/.jpeg depending on your assets
+}
+
+// --- Date/time formatting ---
+function fmtWithTZ(iso) {
+  if (!iso) return '';
+  const opts = { dateStyle:'medium', timeStyle:'short' };
+  let tz = undefined;
+  if (state.tz === 'AEST') tz = 'Australia/Brisbane';
+  const fmt = new Intl.DateTimeFormat('en-AU', tz ? { ...opts, timeZone: tz } : opts);
+  try { return fmt.format(new Date(iso)); } catch { return iso; }
 }
 
 // --- Render helpers for book_table ---
@@ -140,7 +160,6 @@ function renderBestChips(bookTable) {
     const agency = cleanAgencyName(agencyRaw || '');
     if (!agency || odds == null) return '';
     const oddsTxt = Number(odds).toFixed(2);
-
     return `
       <div class="flex items-center justify-between gap-2 bg-emerald-50 dark:bg-emerald-900/30
                   text-emerald-800 dark:text-emerald-200 px-2.5 py-1 rounded-xl w-full">
@@ -169,8 +188,8 @@ function renderFullBookTable(it) {
 
   const rowsHtml = (t.rows || []).map(r => {
     const agency = cleanAgencyName(r.agency || '');
-    const isBestL = t.best?.left?.agency && cleanAgencyName(t.best.left.agency) === agency && t.best.left.odds == Number(r.left);
-    const isBestR = t.best?.right?.agency && cleanAgencyName(t.best.right.agency) === agency && t.best.right.odds == Number(r.right);
+    const isBestL = t.best?.left?.agency && cleanAgencyName(t.best.left.agency) === agency && Number(t.best.left.odds).toFixed(2) === Number(r.left).toFixed(2);
+    const isBestR = t.best?.right?.agency && cleanAgencyName(t.best.right.agency) === agency && Number(t.best.right.odds).toFixed(2) === Number(r.right).toFixed(2);
     const mark = (v, on) => `<span class="px-2 py-0.5 rounded ${on ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : ''} tabular-nums">${v || ''}</span>`;
     return `
       <tr class="border-t border-slate-200 dark:border-slate-700">
@@ -188,7 +207,7 @@ function renderFullBookTable(it) {
 
   return `
     <div class="bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700 p-3 mt-3">
-      <div class="text-xs mb-2 text-slate-600 dark:text-slate-300">${it.match || ''}</div>
+      <div class="text-xs mb-2 text-slate-600 dark:text-slate-300">${(it.game || '')} — ${(it.market || '')}</div>
       <div class="overflow-x-auto">
         <table class="min-w-[560px] w-full text-sm">
           <thead class="text-slate-600 dark:text-slate-300">
@@ -205,7 +224,7 @@ function renderFullBookTable(it) {
     </div>`;
 }
 
-// Keep your update request poller
+// --- Request update poller (unchanged) ---
 async function requestUpdateAndPoll() {
   const status = document.getElementById('updateStatus');
   const btn = document.getElementById('requestUpdate');
@@ -254,83 +273,113 @@ async function requestUpdateAndPoll() {
   setTimeout(poll, intervalMs);
 }
 
+// --- Helpers ---
+function parseBets(matchStr) {
+  // "Team A (-1.5) - 3.15 | Team B (+1.5) - 1.55" -> labels without odds
+  if (!matchStr) return { top: '', bottom: '' };
+  const parts = matchStr.split('|').map(s => s.trim());
+  const label = (s) => s.split(' - ')[0].trim();
+  return { top: label(parts[0] || ''), bottom: label(parts[1] || '') };
+}
+
+function isInteractive(el) {
+  return !!el.closest('a, button, input, select, label, textarea');
+}
+
 // --- Fetch + render ---
 async function fetchData() {
-  const res = await fetch(`/api/opportunities?${qs()}`);
-  const { items, total, page, pages, lastUpdated, sports, competitionIds } = await res.json();
+  // sync tz UI
+  if (els.tzSelect) els.tzSelect.value = state.tz;
 
-  els.lastUpdated.textContent = lastUpdated ? new Date(lastUpdated).toLocaleString() : '—';
+  const res = await fetch(`/api/opportunities?${qs()}`);
+  const { items, total, page, pages, lastUpdated, sports, competitionIds, agencies } = await res.json();
+
+  // meta
+  els.lastUpdated.textContent = lastUpdated ? fmtWithTZ(lastUpdated) : '—';
   els.totalCount.textContent = total;
   els.page.textContent = page;
   els.pages.textContent = pages;
   els.prev.disabled = page <= 1;
   els.next.disabled = page >= pages;
 
+  // populate sport/competition once
   if (els.sport.options.length === 1) {
     sports.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; els.sport.appendChild(o); });
   }
   if (els.competitionId.options.length === 1) {
     competitionIds.forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = id; els.competitionId.appendChild(o); });
   }
+  // populate bookies multi-select
+  if (els.bookies && els.bookies.options.length === 0) {
+    (agencies || []).forEach(a => {
+      const o = document.createElement('option');
+      o.value = a;
+      o.textContent = a;
+      if (state.selectedBookies.has(a)) o.selected = true;
+      els.bookies.appendChild(o);
+    });
+    // init filters from selectedBookies
+    state.filters.bookies = [...state.selectedBookies];
+  }
 
+  // rows
   els.tbody.innerHTML = '';
   const frag = document.createDocumentFragment();
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50';
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
+    const bets = parseBets(it.match);
+
+    const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
 
     // Column: Bookies (best chips OR fallback link)
     let bookiesCell = '';
     if (it.book_table) {
       bookiesCell = renderBestChips(it.book_table);
     } else {
-      // Fallback to old flow if no table present
-      const copyBtn = `<button class="px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" data-copy="${it.search_phrase}">Copy</button>`;
       const go = it.url ? `<a href="${it.url}" target="_blank" rel="noopener" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-blue-700">Open</a>` : '';
-      bookiesCell = `
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-slate-600 dark:text-slate-300">${it.search_phrase || ''}</span>
-          <div class="flex items-center gap-2">${copyBtn}${go}</div>
-        </div>`;
+      bookiesCell = `<div class="flex items-center justify-end gap-2">${go}</div>`;
     }
 
-    // Details toggle (only active when we have a book_table)
-    const detailsBtn = it.book_table
-      ? `<button class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800" data-toggle="details">Show</button>`
-      : `<span class="text-slate-400 text-xs">—</span>`;
-
     tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap">${it.date || it.dateISO || ''}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
       <td class="px-4 py-3">${it.game || ''}</td>
       <td class="px-4 py-3">${it.market || ''}</td>
-      <td class="px-4 py-3">${it.match || ''}</td>
+      <td class="px-4 py-3">
+        <div class="flex flex-col gap-1">
+          <div>${bets.top}</div>
+          <div>${bets.bottom}</div>
+        </div>
+      </td>
       <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
       <td class="px-4 py-3">${bookiesCell}</td>
-      <td class="px-4 py-3 text-right">${detailsBtn}</td>
     `;
 
     frag.appendChild(tr);
 
-    // Details row (hidden by default)
+    // Details row
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 8;
+    tdDetails.colSpan = 7;
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);
 
-    // Wire the toggle
+    // Whole-row toggle
     tr.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-toggle="details"]');
-      if (!btn) return;
+      if (isInteractive(e.target)) return; // don't toggle when clicking buttons/links
       const isHidden = trDetails.classList.contains('hidden');
       trDetails.classList.toggle('hidden');
-      btn.textContent = isHidden ? 'Hide' : 'Show';
+      if (isHidden) {
+        // scroll into view if opening near bottom
+        const rect = trDetails.getBoundingClientRect();
+        if (rect.bottom > window.innerHeight) trDetails.scrollIntoView({ block: 'nearest' });
+      }
     });
   }
 
@@ -346,36 +395,61 @@ function updateAndFetch(patch = {}) {
 
 // events (filters, paging, sorting)
 ['sport','competitionId','dateFrom','dateTo'].forEach(id => {
-  els[id].addEventListener('change', () => {
-    state.filters[id === 'competitionId' ? 'competitionId' : id] = els[id].value;
+  const el = els[id];
+  if (!el) return;
+  el.addEventListener('change', () => {
+    state.filters[id === 'competitionId' ? 'competitionId' : id] = el.value;
     updateAndFetch();
   });
 });
 
-els.minRoi.addEventListener('input', () => {
+els.minRoi?.addEventListener('input', () => {
   els.minRoiValue.textContent = Number(els.minRoi.value).toFixed(1);
 });
-els.minRoi.addEventListener('change', () => {
+els.minRoi?.addEventListener('change', () => {
   state.filters.minRoi = els.minRoi.value;
   updateAndFetch();
 });
 
-els.pageSize.addEventListener('change', () => {
+// bookies multi-select
+function syncBookiesFilter() {
+  const selected = [...els.bookies.selectedOptions].map(o => o.value);
+  state.selectedBookies = new Set(selected);
+  localStorage.setItem('bookiesSelected', JSON.stringify(selected));
+  state.filters.bookies = selected;
+}
+els.bookies?.addEventListener('change', () => {
+  syncBookiesFilter();
+  updateAndFetch();
+});
+els.bookiesAll?.addEventListener('click', () => {
+  const all = els.bookiesAll.getAttribute('data-mode') !== 'all';
+  for (const o of els.bookies.options) o.selected = all;
+  els.bookiesAll.textContent = all ? 'Clear all' : 'Select all';
+  els.bookiesAll.setAttribute('data-mode', all ? 'all' : 'none');
+  syncBookiesFilter();
+  updateAndFetch();
+});
+
+els.pageSize?.addEventListener('change', () => {
   state.pageSize = Number(els.pageSize.value);
   state.page = 1; fetchData();
 });
 
-els.prev.addEventListener('click', () => { if (state.page > 1) { state.page--; fetchData(); } });
-els.next.addEventListener('click', () => { state.page++; fetchData(); });
+els.prev?.addEventListener('click', () => { if (state.page > 1) { state.page--; fetchData(); } });
+els.next?.addEventListener('click', () => { state.page++; fetchData(); });
 
-els.reset.addEventListener('click', () => {
-  state.filters = { sport: '', competitionId: '', dateFrom: '', dateTo: '', minRoi: 0 };
+els.reset?.addEventListener('click', () => {
+  state.filters = { sport: '', competitionId: '', dateFrom: '', dateTo: '', minRoi: 0, bookies: [] };
   els.sport.value = els.competitionId.value = els.dateFrom.value = els.dateTo.value = '';
   els.minRoi.value = 0; els.minRoiValue.textContent = '0.0';
+  state.selectedBookies = new Set();
+  localStorage.removeItem('bookiesSelected');
+  if (els.bookies) for (const o of els.bookies.options) o.selected = false;
   updateAndFetch();
 });
 
-els.refresh.addEventListener('click', fetchData);
+els.refresh?.addEventListener('click', fetchData);
 
 // header sorting
 for (const th of document.querySelectorAll('thead [data-sort]')) {
@@ -387,18 +461,14 @@ for (const th of document.querySelectorAll('thead [data-sort]')) {
   });
 }
 
-// delegate old copy buttons (still present in fallback)
-addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-copy]');
-  if (!btn) return;
-  const text = btn.getAttribute('data-copy');
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'Copied';
-    setTimeout(() => (btn.textContent = 'Copy'), 1200);
-  });
-});
-
 document.getElementById('requestUpdate')?.addEventListener('click', requestUpdateAndPoll);
+
+// timezone select
+els.tzSelect?.addEventListener('change', () => {
+  state.tz = els.tzSelect.value;
+  localStorage.setItem('tzMode', state.tz);
+  fetchData();
+});
 
 // init
 fetchData();
