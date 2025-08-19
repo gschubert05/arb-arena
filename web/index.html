@@ -35,6 +35,35 @@
     }
     html.dark .bookie-chip .bookie-name { color: #d1fae5; }
     .bookie-chip .bookie-odds { font-weight: 700; min-width: 3.5rem; text-align: right; }
+
+    /* Select-like trigger for bookies dropdown */
+    .select-like {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      width:100%; padding:10px 12px; border-radius:12px;
+      border:1px solid rgb(203 213 225); /* slate-300 */
+      background: #fff; cursor: pointer;
+    }
+    html.dark .select-like {
+      border-color: rgb(71 85 105); /* slate-600 */
+      background: rgb(30 41 59);    /* slate-800 */
+    }
+    .caret {
+      width: 12px; height: 12px; flex-shrink:0;
+    }
+
+    /* Absolute dropdown panel */
+    .dropdown-panel {
+      position: absolute; top: 100%; right: 0; margin-top: 6px;
+      width: min(520px, 92vw); max-height: 56vh; overflow:auto;
+      z-index: 50;
+      background: #fff; border: 1px solid rgb(203 213 225); border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(2,6,23,.25);
+      padding: 12px;
+    }
+    html.dark .dropdown-panel {
+      background: rgb(15 23 42); /* slate-900 */
+      border-color: rgb(71 85 105); /* slate-600 */
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
@@ -89,21 +118,22 @@
           </select>
         </div>
 
-        <div>
+        <!-- Bookies dropdown (overlay) -->
+        <div id="bookiesWrapper" class="relative">
           <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Bookies</label>
-          <button id="toggleBookiesFilter"
-                  class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 w-full text-left hover:bg-slate-50 dark:hover:bg-slate-800">
-            Choose bookies…
-          </button>
-          <div id="bookiesPanel" class="hidden mt-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+          <div id="bookiesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="bookiesSummary" class="truncate">All bookies</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="bookiesPanel" class="dropdown-panel hidden">
             <div class="flex items-center gap-3 mb-2">
               <label class="inline-flex items-center gap-2">
-                <input id="bookiesSelectAll" type="checkbox" class="rounded" />
+                <input id="bookiesSelectAll" type="checkbox" class="rounded">
                 <span>Select all</span>
               </label>
               <span id="bookiesSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
             </div>
-            <div id="bookiesChkWrap" class="max-h-56 overflow-auto grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+            <div id="bookiesChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
           </div>
         </div>
 
@@ -155,8 +185,9 @@
               <th class="px-4 py-3 text-left cursor-pointer" data-sort="sport">Sport</th>
               <th class="px-4 py-3 text-left">Game</th>
               <th class="px-4 py-3 text-left">Market</th>
-              <th class="px-4 py-3 text-left">Bets</th>
+              <!-- ROI moved before Bets -->
               <th class="px-4 py-3 text-right cursor-pointer" data-sort="roi">ROI</th>
+              <th class="px-4 py-3 text-left">Bets</th>
               <th class="px-4 py-3 text-left">Bookies</th>
             </tr>
           </thead>

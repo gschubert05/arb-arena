@@ -50,8 +50,10 @@ const els = {
   reset: document.getElementById('resetFilters'),
   refresh: document.getElementById('refresh'),
 
-  // Bookies checkbox UI
-  toggleBookiesFilter: document.getElementById('toggleBookiesFilter'),
+  // Bookies dropdown UI
+  bookiesWrapper: document.getElementById('bookiesWrapper'),
+  bookiesDropdown: document.getElementById('bookiesDropdown'),
+  bookiesSummary: document.getElementById('bookiesSummary'),
   bookiesPanel: document.getElementById('bookiesPanel'),
   bookiesChkWrap: document.getElementById('bookiesChkWrap'),
   bookiesSelectAll: document.getElementById('bookiesSelectAll'),
@@ -115,7 +117,7 @@ function agencySlug(name) {
 }
 function logoFor(name) {
   const slug = agencySlug(name);
-  return `/images/${slug}.png`; // adjust to your actual image extensions
+  return `/images/${slug}.jpeg`; // adjust to your actual image extensions
 }
 
 // --- Date/time formatting ---
@@ -132,7 +134,7 @@ function fmtWithTZ(iso) {
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
   const left  = bookTable.best.left  || {};
-  const right = bookTable.best.right || {};
+  theRight = bookTable.best.right || {};
   const chip = (agencyRaw, odds) => {
     const agency = cleanAgencyName(agencyRaw || '');
     if (!agency || odds == null) return '';
@@ -146,7 +148,7 @@ function renderBestChips(bookTable) {
         <span class="bookie-odds tabular-nums">${oddsTxt}</span>
       </div>`;
   };
-  return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(right.agency, right.odds)}</div>`;
+  return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(theRight.agency, theRight.odds)}</div>`;
 }
 
 // --- Full book table (expanded row) ---
@@ -205,7 +207,7 @@ function renderBookiesCheckboxes(agencies) {
   const wrap = els.bookiesChkWrap;
   wrap.innerHTML = '';
 
-  // Determine if we should show "all selected" as UI default
+  // Determine default: "all selected" if user has no explicit subset saved
   const selected = state.selectedBookies;
   const treatAllSelected = selected.size === 0 || selected.size >= agencies.length;
 
@@ -213,7 +215,7 @@ function renderBookiesCheckboxes(agencies) {
     const id = `bk-${agencySlug(a)}`;
     const checked = treatAllSelected ? true : selected.has(a);
     const row = document.createElement('label');
-    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
+    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100";
     row.innerHTML = `
       <input type="checkbox" id="${id}" class="rounded" ${checked ? 'checked' : ''} data-agency="${a}">
       <span class="truncate">${a}</span>
@@ -223,53 +225,78 @@ function renderBookiesCheckboxes(agencies) {
 
   // Select all checkbox state
   els.bookiesSelectAll.checked = treatAllSelected;
-  updateBookiesSelectedCount();
+  updateBookiesSelectedSummary();
 
-  // Attach listeners
+  // Change listeners
   wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const a = cb.getAttribute('data-agency');
       if (cb.checked) state.selectedBookies.add(a);
       else state.selectedBookies.delete(a);
 
-      // If user checks everything, collapse to "no filter" by clearing the explicit list
+      // If everything is checked, collapse to "no filter"
       if (state.selectedBookies.size >= agencies.length) {
         state.selectedBookies = new Set(); // means "no filter"
+        wrap.querySelectorAll('input[type="checkbox"]').forEach(x => x.checked = true);
+        els.bookiesSelectAll.checked = true;
+      } else {
+        els.bookiesSelectAll.checked = false;
       }
 
       localStorage.setItem('bookiesSelected', JSON.stringify([...state.selectedBookies]));
-      updateBookiesSelectedCount();
+      updateBookiesSelectedSummary();
       fetchData();
     });
   });
 
-  els.bookiesSelectAll.addEventListener('change', () => {
+  // Select all toggler
+  els.bookiesSelectAll.onchange = () => {
     if (els.bookiesSelectAll.checked) {
-      // All selected -> clear explicit list (means "no filter")
+      // All selected -> clear explicit list and tick everything
       state.selectedBookies = new Set();
       wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
-      // None selected -> explicit empty set (still means "no filter" for API, but reflects UI)
+      // None selected -> untick everything (still treat as "no filter" unless user picks a subset)
       state.selectedBookies = new Set();
       wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     }
     localStorage.setItem('bookiesSelected', JSON.stringify([...state.selectedBookies]));
-    updateBookiesSelectedCount();
+    updateBookiesSelectedSummary();
     fetchData();
-  });
+  };
 }
 
-function updateBookiesSelectedCount() {
-  let text = 'All';
+function updateBookiesSelectedSummary() {
+  let text = 'All bookies';
   if (state.selectedBookies.size > 0 && state._agencies.length && state.selectedBookies.size < state._agencies.length) {
     text = `${state.selectedBookies.size} selected`;
   }
-  els.bookiesSelectedCount.textContent = text;
+  els.bookiesSummary.textContent = text;
+  els.bookiesSelectedCount.textContent = text.replace(' bookies','');
 }
 
-// --- Toggle the hidden panel
-els.toggleBookiesFilter?.addEventListener('click', () => {
-  els.bookiesPanel.classList.toggle('hidden');
+// --- Open/close dropdown (overlay) ---
+function openBookiesDropdown() {
+  els.bookiesPanel.classList.remove('hidden');
+  els.bookiesDropdown.setAttribute('aria-expanded', 'true');
+}
+function closeBookiesDropdown() {
+  els.bookiesPanel.classList.add('hidden');
+  els.bookiesDropdown.setAttribute('aria-expanded', 'false');
+}
+els.bookiesDropdown?.addEventListener('click', (e) => {
+  const isOpen = !els.bookiesPanel.classList.contains('hidden');
+  if (isOpen) closeBookiesDropdown(); else openBookiesDropdown();
+});
+els.bookiesDropdown?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.bookiesDropdown.click(); }
+  if (e.key === 'Escape') closeBookiesDropdown();
+});
+document.addEventListener('click', (e) => {
+  if (!els.bookiesWrapper.contains(e.target)) closeBookiesDropdown();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeBookiesDropdown();
 });
 
 // --- Fetch + render ---
@@ -280,6 +307,7 @@ async function fetchData() {
   const res = await fetch(`/api/opportunities?${qs()}`);
   const { items, total, page, pages, lastUpdated, sports, competitionIds, agencies } = await res.json();
 
+  // meta
   els.lastUpdated.textContent = lastUpdated ? fmtWithTZ(lastUpdated) : '—';
   els.totalCount.textContent = total;
   els.page.textContent = page;
@@ -295,13 +323,13 @@ async function fetchData() {
     (competitionIds || []).forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = id; els.competitionId.appendChild(o); });
   }
 
-  // Render bookies checkbox panel (once or when the list changes)
+  // Render bookies checkbox panel (once or when list changes)
   const agStrNow = JSON.stringify(agencies || []);
   const agStrPrev = JSON.stringify(state._agencies || []);
   if (agStrNow !== agStrPrev) {
     renderBookiesCheckboxes(agencies || []);
   } else {
-    updateBookiesSelectedCount();
+    updateBookiesSelectedSummary();
   }
 
   // Table rows
@@ -310,31 +338,30 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer';
+    tr.className = 'hover:bg-slate-50';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
 
+    // Bookies cell
     let bookiesCell = '';
-    if (it.book_table) {
-      bookiesCell = renderBestChips(it.book_table);
-    } else {
-      bookiesCell = `<span class="text-slate-400">—</span>`;
-    }
+    if (it.book_table) bookiesCell = renderBestChips(it.book_table);
+    else bookiesCell = `<span class="text-slate-400">—</span>`;
 
+    // NOTE: ROI column moved BEFORE Bets, so Bets sits next to Bookies
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
       <td class="px-4 py-3">${it.game || ''}</td>
       <td class="px-4 py-3">${it.market || ''}</td>
+      <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
       <td class="px-4 py-3">
         <div class="flex flex-col gap-1">
           <div>${bets.top}</div>
           <div>${bets.bottom}</div>
         </div>
       </td>
-      <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
       <td class="px-4 py-3">${bookiesCell}</td>
     `;
 
