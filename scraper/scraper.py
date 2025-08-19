@@ -16,6 +16,13 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'server', 'data', 'opp
 TARGET_URL = "http://odds.aussportsbetting.com/multibet"
 SKIP_IDS = {72, 73, 108, 114}
 
+# --- Skip noisy Baseball O/U +0.5 totals (e.g., "Over +0.5" vs "Under +0.5")
+_RE_OVER_05  = re.compile(r'\bover\s*\(?\+?0\.5\)?\b', re.I)
+_RE_UNDER_05 = re.compile(r'\bunder\s*\(?\+?0\.5\)?\b', re.I)
+
+def _is_bad_baseball_half_total(txt: str) -> bool:
+    s = re.sub(r'\s+', ' ', txt or '').lower().replace('−', '-')  # normalize spaces / unicode minus
+    return bool(_RE_OVER_05.search(s) and _RE_UNDER_05.search(s))
 
 def parse_comp_ids(env_val: str | None) -> List[int]:
     """Parse COMP_IDS like "1-150" or "11,12,13" into a list of ints."""
@@ -78,7 +85,6 @@ def _parse_float(text: str) -> Optional[float]:
 
 def _norm(s: str) -> str:
     return (s or "").strip()
-
 
 def _contains_ci(hay: str, needle: str) -> bool:
     return (needle or "").lower() in (hay or "").lower()
@@ -204,6 +210,12 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
         link_text_1 = left_anchor.text.strip()
         link_text_2 = right_anchor.text.strip()
+
+        # Skip Baseball Over/Under +0.5 pairs (problematic line)
+        if 'baseball' in (sport_value or '').lower():
+            if _is_bad_baseball_half_total(f"{link_text_1} | {link_text_2}"):
+                continue
+
 
         onclick_1 = left_anchor.get("onclick")
         full_url = None
