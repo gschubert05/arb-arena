@@ -115,7 +115,7 @@ function agencySlug(name) {
 }
 function logoFor(name) {
   const slug = agencySlug(name);
-  return `/images/${slug}.jpeg`; // adjust to your actual image extensions
+  return `/images/${slug}.png`; // adjust to your actual image extensions
 }
 
 // --- Date/time formatting ---
@@ -213,7 +213,7 @@ function renderBookiesCheckboxes(agencies) {
     const id = `bk-${agencySlug(a)}`;
     const checked = treatAllSelected ? true : selected.has(a);
     const row = document.createElement('label');
-    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100";
+    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
     row.innerHTML = `
       <input type="checkbox" id="${id}" class="rounded" ${checked ? 'checked' : ''} data-agency="${a}">
       <span class="truncate">${a}</span>
@@ -310,7 +310,7 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50';
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
@@ -411,4 +411,19 @@ els.refresh?.addEventListener('click', fetchData);
 // header sorting
 for (const th of document.querySelectorAll('thead [data-sort]')) {
   th.addEventListener('click', () => {
-    const key = th.getAttribute
+    const key = th.getAttribute('data-sort');
+    if (state.sortBy === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+    else { state.sortBy = key; state.sortDir = 'asc'; }
+    fetchData();
+  });
+}
+
+// timezone select
+els.tzSelect?.addEventListener('change', () => {
+  state.tz = els.tzSelect.value;
+  localStorage.setItem('tzMode', state.tz);
+  fetchData();
+});
+
+// init
+fetchData();
