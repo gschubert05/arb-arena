@@ -24,7 +24,7 @@ const state = {
     dateTo: '',
     minRoi: 0,
   },
-  tz: localStorage.getItem('tzMode') || 'AEST',
+  tz: localStorage.getItem('tzMode') || 'AEST', // 'auto' or 'AEST'
   selectedBookies: new Set(JSON.parse(localStorage.getItem('bookiesSelected') || '[]')),
   selectedSports: new Set(JSON.parse(localStorage.getItem('sportsSelected') || '[]')),
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
@@ -50,7 +50,7 @@ const els = {
   reset: document.getElementById('resetFilters'),
   refresh: document.getElementById('refresh'),
 
-  // Dropdown clusters
+  // Bookies dropdown UI
   bookiesWrapper: document.getElementById('bookiesWrapper'),
   bookiesDropdown: document.getElementById('bookiesDropdown'),
   bookiesSummary: document.getElementById('bookiesSummary'),
@@ -59,6 +59,7 @@ const els = {
   bookiesSelectAll: document.getElementById('bookiesSelectAll'),
   bookiesSelectedCount: document.getElementById('bookiesSelectedCount'),
 
+  // Sports dropdown UI
   sportsWrapper: document.getElementById('sportsWrapper'),
   sportsDropdown: document.getElementById('sportsDropdown'),
   sportsSummary: document.getElementById('sportsSummary'),
@@ -67,6 +68,7 @@ const els = {
   sportsSelectAll: document.getElementById('sportsSelectAll'),
   sportsSelectedCount: document.getElementById('sportsSelectedCount'),
 
+  // Leagues dropdown UI
   leaguesWrapper: document.getElementById('leaguesWrapper'),
   leaguesDropdown: document.getElementById('leaguesDropdown'),
   leaguesSummary: document.getElementById('leaguesSummary'),
@@ -103,7 +105,7 @@ function qs() {
   return new URLSearchParams(params).toString();
 }
 
-// --- Sort indicators ---
+// --- Sort indicators (tiny SVGs) ---
 const ICONS = {
   both: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 4l3-3 3 3H3zm6 4l-3 3-3-3h6z" fill="currentColor"/></svg>',
   up:   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 7l3-3 3 3H3z" fill="currentColor"/></svg>',
@@ -128,7 +130,7 @@ function renderSortIndicators() {
   });
 }
 
-// --- Name cleaning + logos ---
+// --- Name cleaning + logos (.jpeg) ---
 function cleanAgencyName(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
@@ -140,7 +142,7 @@ function agencySlug(name) {
 }
 function logoFor(name) {
   const slug = agencySlug(name);
-  return `/images/${slug}.png`;
+  return `/images/${slug}.jpeg`;
 }
 
 // --- Date/time formatting ---
@@ -153,7 +155,7 @@ function fmtWithTZ(iso) {
   try { return fmt.format(new Date(iso)); } catch { return iso; }
 }
 
-// --- Bookies chips ---
+// --- Render Bookies column (best chips) ---
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
   const left  = bookTable.best.left  || {};
@@ -165,7 +167,7 @@ function renderBestChips(bookTable) {
     return `
       <div class="bookie-chip">
         <div class="bookie-identity min-w-0">
-          <img src="${logoFor(agency)}" alt="${agency}" onerror="this.src='/logos/placeholder.svg'">
+          <img src="${logoFor(agency)}" alt="${agency}" onerror="this.src='/logos/placeholder.jpeg'">
           <span class="bookie-name truncate">${agency}</span>
         </div>
         <span class="bookie-odds tabular-nums">${oddsTxt}</span>
@@ -174,7 +176,7 @@ function renderBestChips(bookTable) {
   return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(right.agency, right.odds)}</div>`;
 }
 
-// --- Expanded odds table ---
+// --- Full book table (expanded row) ---
 function renderFullBookTable(it) {
   const t = it.book_table;
   if (!t) return '';
@@ -188,7 +190,7 @@ function renderFullBookTable(it) {
     return `
       <tr class="border-t border-slate-200 dark:border-slate-700">
         <td class="px-3 py-2"><div class="flex items-center gap-2">
-          <img src="${logoFor(agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.svg'"><span>${agency}</span></div></td>
+          <img src="${logoFor(agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.jpeg'"><span>${agency}</span></div></td>
         <td class="px-3 py-2 text-right">${mark(r.left, isBestL)}</td>
         <td class="px-3 py-2 text-right">${mark(r.right, isBestR)}</td>
         <td class="px-3 py-2 text-right text-slate-500 dark:text-slate-400">${r.updated || ''}</td>
@@ -278,10 +280,60 @@ function updateSummaryText(set, fullArr, el, labelAll) {
   el.textContent = text;
 }
 
+// --- Dropdown positioning (prevents off-screen overflow) ---
+function positionDropdown(wrapperEl, panelEl) {
+  // Reset any previous positioning
+  panelEl.style.left = '';
+  panelEl.style.right = '';
+
+  // Show invisibly to measure
+  const wasHidden = panelEl.classList.contains('hidden');
+  if (wasHidden) {
+    panelEl.classList.remove('hidden');
+    panelEl.style.visibility = 'hidden';
+  }
+
+  const wrapRect = wrapperEl.getBoundingClientRect();
+  const panelRect = panelEl.getBoundingClientRect();
+  const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+  const margin = 8; // keep a small viewport margin
+
+  // Try aligning left edge
+  const fitsLeft = wrapRect.left + panelRect.width <= vw - margin;
+  // Try aligning right edge
+  const fitsRight = wrapRect.right - panelRect.width >= margin;
+
+  if (fitsLeft) {
+    panelEl.style.left = '0';
+  } else if (fitsRight) {
+    panelEl.style.right = '0';
+  } else {
+    // Panel wider than available; clamp width and choose side by available space
+    const availLeft = wrapRect.right - margin;
+    const availRight = vw - wrapRect.left - margin;
+    const targetSide = availRight >= availLeft ? 'left' : 'right';
+    panelEl.style.maxWidth = `${Math.max(availLeft, availRight)}px`;
+    if (targetSide === 'left') panelEl.style.left = '0';
+    else panelEl.style.right = '0';
+  }
+
+  if (wasHidden) {
+    panelEl.style.visibility = '';
+    panelEl.classList.add('hidden');
+  }
+}
+
 // --- Open/close dropdown helpers ---
 function wireDropdown(wrapper, trigger, panel) {
-  function open() { panel.classList.remove('hidden'); trigger.setAttribute('aria-expanded','true'); }
-  function close(){ panel.classList.add('hidden'); trigger.setAttribute('aria-expanded','false'); }
+  function open() {
+    positionDropdown(wrapper, panel);
+    panel.classList.remove('hidden');
+    trigger.setAttribute('aria-expanded','true');
+  }
+  function close(){
+    panel.classList.add('hidden');
+    trigger.setAttribute('aria-expanded','false');
+  }
   trigger.addEventListener('click', () => {
     if (panel.classList.contains('hidden')) open(); else close();
   });
@@ -291,6 +343,9 @@ function wireDropdown(wrapper, trigger, panel) {
   });
   document.addEventListener('click', (e) => { if (!wrapper.contains(e.target)) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  // Reposition on resize/scroll while open
+  window.addEventListener('resize', () => { if (!panel.classList.contains('hidden')) positionDropdown(wrapper, panel); });
+  window.addEventListener('scroll', () => { if (!panel.classList.contains('hidden')) positionDropdown(wrapper, panel); }, { passive: true });
 }
 
 // Wire all three dropdowns
@@ -385,7 +440,8 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer';
+    // 🔒 As requested: exact class
+    tr.className = 'hover:bg-slate-50';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
@@ -410,6 +466,7 @@ async function fetchData() {
 
     frag.appendChild(tr);
 
+    // Details row (odds table)
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');

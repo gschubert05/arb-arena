@@ -12,7 +12,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // keep simple; avoids CSP issues on Render
+}));
 app.use(compression());
 app.use(morgan('tiny'));
 
@@ -22,21 +24,66 @@ const DATA_URL = process.env.DATA_URL ?? '';
 
 let cache = { ts: 0, data: { lastUpdated: null, items: [] } };
 
+// --- robust fetch with timeout + retries, fallback to cache/local ---
+async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, {
+        cache: 'no-store',
+        signal: ac.signal,
+        headers: { 'User-Agent': 'arb-arena/1.0 (+render)' },
+        // keepalive: true  // (node undici ignores in server env)
+      });
+      clearTimeout(t);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return await resp.json();
+    } catch (err) {
+      clearTimeout(t);
+      lastErr = err;
+      const backoff = Math.min(2000 * Math.pow(2, i), 8000) + Math.random() * 250;
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
+
 async function loadData() {
-  if (DATA_URL === '') {
+  // If using local file, never fetch
+  if (!DATA_URL) {
     try {
       const raw = await fs.readFile(DATA_FILE, 'utf8');
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? { lastUpdated: null, items: parsed } : parsed;
-    } catch { return { lastUpdated: null, items: [] }; }
+    } catch {
+      return { lastUpdated: null, items: [] };
+    }
   }
+
   const now = Date.now();
+  // serve cached within 60s to avoid hammering
   if (now - cache.ts < 60_000 && cache.data) return cache.data;
-  const resp = await fetch(DATA_URL, { cache: 'no-store' });
-  const json = await resp.json();
-  const normalized = json.items ? json : { lastUpdated: null, items: json };
-  cache = { ts: now, data: normalized };
-  return normalized;
+
+  try {
+    const json = await fetchWithRetry(DATA_URL, { attempts: 4, timeoutMs: 6000 });
+    const normalized = json.items ? json : { lastUpdated: null, items: json };
+    cache = { ts: now, data: normalized };
+    return normalized;
+  } catch (err) {
+    // Fallback: serve last cache or local file; never throw
+    if (cache.data && cache.data.items) return cache.data;
+    try {
+      const raw = await fs.readFile(DATA_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      const normalized = Array.isArray(parsed) ? { lastUpdated: null, items: parsed } : parsed;
+      cache = { ts: now, data: normalized };
+      return normalized;
+    } catch {
+      return { lastUpdated: null, items: [] };
+    }
+  }
 }
 
 function cleanAgency(name) {
@@ -77,8 +124,14 @@ function coerceKickoffISO(dstr) {
 app.use(express.static(WEB_DIR, { etag: true, lastModified: true, cacheControl: false }));
 
 app.get('/api/opportunities', async (req, res) => {
+  let data;
+  try {
+    data = await loadData();
+  } catch {
+    data = { lastUpdated: null, items: [] };
+  }
+
   const {
-    // CSV accepted for sports & competitionIds & bookies
     sports = '',
     sport = '',
     competitionIds = '',
@@ -93,7 +146,7 @@ app.get('/api/opportunities', async (req, res) => {
     bookies = '',
   } = req.query;
 
-  const { lastUpdated, items } = await loadData();
+  const { lastUpdated, items } = data;
 
   for (const it of items) {
     if (!it.dateISO && it.date) {
