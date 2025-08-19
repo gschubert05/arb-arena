@@ -24,7 +24,7 @@ const state = {
     dateTo: '',
     minRoi: 0,
   },
-  tz: localStorage.getItem('tzMode') || 'AEST', // 'auto' or 'AEST'
+  tz: localStorage.getItem('tzMode') || 'AEST',
   selectedBookies: new Set(JSON.parse(localStorage.getItem('bookiesSelected') || '[]')),
   selectedSports: new Set(JSON.parse(localStorage.getItem('sportsSelected') || '[]')),
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
@@ -93,11 +93,8 @@ function qs() {
   // Multi filters as CSV (only when strict subset)
   const addCsv = (set, fullArr, key) => {
     if (!fullArr.length) return;
-    if (set.size > 0 && set.size < fullArr.length) {
-      params[key] = [...set].join(',');
-    }
+    if (set.size > 0 && set.size < fullArr.length) params[key] = [...set].join(',');
   };
-
   addCsv(state.selectedBookies, state._agencies, 'bookies');
   addCsv(state.selectedSports, state._sports, 'sports');
   addCsv(state.selectedLeagues, state._leagues, 'competitionIds');
@@ -105,7 +102,7 @@ function qs() {
   return new URLSearchParams(params).toString();
 }
 
-// --- Sort indicators (tiny SVGs) ---
+// --- Sort indicators ---
 const ICONS = {
   both: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 4l3-3 3 3H3zm6 4l-3 3-3-3h6z" fill="currentColor"/></svg>',
   up:   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 7l3-3 3 3H3z" fill="currentColor"/></svg>',
@@ -155,7 +152,7 @@ function fmtWithTZ(iso) {
   try { return fmt.format(new Date(iso)); } catch { return iso; }
 }
 
-// --- Render Bookies column (best chips) ---
+// --- Bookies chips ---
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
   const left  = bookTable.best.left  || {};
@@ -176,7 +173,7 @@ function renderBestChips(bookTable) {
   return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(right.agency, right.odds)}</div>`;
 }
 
-// --- Full book table (expanded row) ---
+// --- Expanded odds table ---
 function renderFullBookTable(it) {
   const t = it.book_table;
   if (!t) return '';
@@ -226,44 +223,60 @@ function isInteractive(el) {
   return !!el.closest('a, button, input, select, label, textarea, summary');
 }
 
-// --- Generic checkbox panel renderer ---
+// --- Generic checkbox panel renderer (fixed) ---
 function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
   wrapEl.innerHTML = '';
-  const treatAllSelected = selectedSet.size === 0 || selectedSet.size >= items.length;
 
+  // Treat "All" only when Select All is checked AND no explicit subset
+  const treatAllSelected = (selectAllEl.checked === true) && (selectedSet.size === 0 || selectedSet.size >= items.length);
+
+  // Build rows
   items.forEach(v => {
     const id = `${allKey}-${v.toString().replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
-    const checked = treatAllSelected ? true : selectedSet.has(v);
+    const isChecked = treatAllSelected ? true : selectedSet.has(v);
     const row = document.createElement('label');
     row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
-    row.innerHTML = `<input type="checkbox" id="${id}" class="rounded" ${checked ? 'checked' : ''} data-val="${v}"><span class="truncate">${v}</span>`;
+    row.innerHTML = `<input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}"><span class="truncate">${v}</span>`;
     wrapEl.appendChild(row);
   });
 
-  // Select all state
+  // Keep select-all checkbox in sync
   selectAllEl.checked = treatAllSelected;
 
+  // Individual checkbox handler
   wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const val = cb.getAttribute('data-val');
+
+      // If we were in implicit "All" state, seed the set with ALL items first
+      if (selectAllEl.checked === true && selectedSet.size === 0) {
+        items.forEach(v => selectedSet.add(v));
+      }
+
+      // Apply this toggle to the explicit set
       if (cb.checked) selectedSet.add(val);
       else selectedSet.delete(val);
+
+      // Collapse back to "All" if everything is checked
       if (selectedSet.size >= items.length) {
-        selectedSet.clear(); // collapse to "no filter"
-        wrapEl.querySelectorAll('input[type="checkbox"]').forEach(x => x.checked = true);
+        selectedSet.clear();               // empty => means "All"
         selectAllEl.checked = true;
       } else {
-        selectAllEl.checked = false;
+        selectAllEl.checked = false;       // subset
       }
+
       onChange();
     });
   });
 
+  // Select-all handler
   selectAllEl.onchange = () => {
     if (selectAllEl.checked) {
+      // Back to implicit "All"
       selectedSet.clear();
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
+      // Show none ticked (user will then pick a subset)
       selectedSet.clear();
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     }
@@ -274,76 +287,51 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
 // --- Summaries
 function updateSummaryText(set, fullArr, el, labelAll) {
   let text = labelAll;
-  if (set.size > 0 && fullArr.length && set.size < fullArr.length) {
-    text = `${set.size} selected`;
-  }
+  if (set.size > 0 && fullArr.length && set.size < fullArr.length) text = `${set.size} selected`;
   el.textContent = text;
 }
 
 // --- Dropdown positioning (prevents off-screen overflow) ---
 function positionDropdown(wrapperEl, panelEl) {
-  // Reset any previous positioning
   panelEl.style.left = '';
   panelEl.style.right = '';
 
-  // Show invisibly to measure
   const wasHidden = panelEl.classList.contains('hidden');
-  if (wasHidden) {
-    panelEl.classList.remove('hidden');
-    panelEl.style.visibility = 'hidden';
-  }
+  if (wasHidden) { panelEl.classList.remove('hidden'); panelEl.style.visibility = 'hidden'; }
 
   const wrapRect = wrapperEl.getBoundingClientRect();
   const panelRect = panelEl.getBoundingClientRect();
   const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-  const margin = 8; // keep a small viewport margin
+  const margin = 8;
 
-  // Try aligning left edge
   const fitsLeft = wrapRect.left + panelRect.width <= vw - margin;
-  // Try aligning right edge
   const fitsRight = wrapRect.right - panelRect.width >= margin;
 
-  if (fitsLeft) {
-    panelEl.style.left = '0';
-  } else if (fitsRight) {
-    panelEl.style.right = '0';
-  } else {
-    // Panel wider than available; clamp width and choose side by available space
+  if (fitsLeft)      panelEl.style.left = '0';
+  else if (fitsRight)panelEl.style.right = '0';
+  else {
     const availLeft = wrapRect.right - margin;
     const availRight = vw - wrapRect.left - margin;
     const targetSide = availRight >= availLeft ? 'left' : 'right';
     panelEl.style.maxWidth = `${Math.max(availLeft, availRight)}px`;
     if (targetSide === 'left') panelEl.style.left = '0';
-    else panelEl.style.right = '0';
+    else                       panelEl.style.right = '0';
   }
 
-  if (wasHidden) {
-    panelEl.style.visibility = '';
-    panelEl.classList.add('hidden');
-  }
+  if (wasHidden) { panelEl.style.visibility = ''; panelEl.classList.add('hidden'); }
 }
 
 // --- Open/close dropdown helpers ---
 function wireDropdown(wrapper, trigger, panel) {
-  function open() {
-    positionDropdown(wrapper, panel);
-    panel.classList.remove('hidden');
-    trigger.setAttribute('aria-expanded','true');
-  }
-  function close(){
-    panel.classList.add('hidden');
-    trigger.setAttribute('aria-expanded','false');
-  }
-  trigger.addEventListener('click', () => {
-    if (panel.classList.contains('hidden')) open(); else close();
-  });
+  function open() { positionDropdown(wrapper, panel); panel.classList.remove('hidden'); trigger.setAttribute('aria-expanded','true'); }
+  function close(){ panel.classList.add('hidden');    trigger.setAttribute('aria-expanded','false'); }
+  trigger.addEventListener('click', () => { panel.classList.contains('hidden') ? open() : close(); });
   trigger.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.click(); }
     if (e.key === 'Escape') close();
   });
   document.addEventListener('click', (e) => { if (!wrapper.contains(e.target)) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  // Reposition on resize/scroll while open
   window.addEventListener('resize', () => { if (!panel.classList.contains('hidden')) positionDropdown(wrapper, panel); });
   window.addEventListener('scroll', () => { if (!panel.classList.contains('hidden')) positionDropdown(wrapper, panel); }, { passive: true });
 }
@@ -440,7 +428,7 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    // 🔒 As requested: exact class
+    // exact hover class as requested
     tr.className = 'hover:bg-slate-50';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
@@ -466,7 +454,6 @@ async function fetchData() {
 
     frag.appendChild(tr);
 
-    // Details row (odds table)
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
