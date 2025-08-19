@@ -278,7 +278,7 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors';
+    tr.className = 'hover:bg-slate-50';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
 
