@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup, NavigableString
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -120,6 +121,29 @@ def _updated_from_td(td) -> str:
     m2 = re.search(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", candidate)
     return m2.group(1) if m2 else candidate
 
+def make_driver() -> webdriver.Chrome:
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1600,1200")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/124.0.0.0 Safari/537.36")
+
+    # ✅ Use the Chrome that setup-chrome installed (matches its Chromedriver)
+    chrome_bin = os.environ.get("CHROME_BIN")
+    if chrome_bin:
+        options.binary_location = chrome_bin
+
+    # (optional) If the action exposes chromedriver path, use it explicitly
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
+    if chromedriver_path:
+        service = Service(chromedriver_path)
+        return webdriver.Chrome(service=service, options=options)
+
+    # Fallback: rely on PATH / Selenium Manager
+    return webdriver.Chrome(options=options)
 
 
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:

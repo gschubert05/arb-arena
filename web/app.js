@@ -18,7 +18,7 @@ const state = {
   sortBy: 'roi',
   sortDir: 'desc',
   page: 1,
-  pageSize: 50,
+  pageSize: 15,
   filters: {
     dateFrom: '',
     dateTo: '',

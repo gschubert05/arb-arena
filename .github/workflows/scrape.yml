@@ -41,9 +41,10 @@ jobs:
           chrome-version: stable
           install-dependencies: true
           install-chromedriver: true
-      - name: Export CHROME_BIN
-        run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
-
+      - name: Export Chrome paths
+  	run: |
+          echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PATH=${{ steps.setup-chrome.outputs.chromedriver-path }}" >> $GITHUB_ENV
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
