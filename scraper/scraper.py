@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'server', 'data', 'opportunities.json')
@@ -53,6 +54,37 @@ def make_driver() -> webdriver.Chrome:
                          "Chrome/124.0.0.0 Safari/537.36")
     driver = webdriver.Chrome(options=options)
     return driver
+
+def _find_in_any_frame(driver, by, value, timeout=15):
+    """
+    Find an element by (by, value) either in the top document or any iframe.
+    Leaves the driver focused in the frame where the element was found.
+    Returns the WebElement.
+    """
+    deadline = time.time() + timeout
+    last_err = None
+    while time.time() < deadline:
+        try:
+            # try top-level
+            driver.switch_to.default_content()
+            return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
+        except Exception as e:
+            last_err = e
+        # try each iframe
+        try:
+            frames = driver.find_elements(By.TAG_NAME, "iframe")
+        except Exception:
+            frames = []
+        for fr in frames:
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(fr)
+                return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
+            except Exception as e:
+                last_err = e
+        time.sleep(0.3)
+    driver.switch_to.default_content()
+    raise last_err or TimeoutException(f"Could not locate {value} in any frame")
 
 
 def extract_search_phrase(match_text: str) -> str:
@@ -150,12 +182,16 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
     rows: List[Dict[str, Any]] = []
     driver.get(TARGET_URL)
 
-    # Wait for compid input & update button
-    input_el = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.NAME, "compid")))
+    # Wait for compid input & update button (top-level OR inside an iframe)
+    input_el = _find_in_any_frame(driver, By.NAME, "compid", timeout=15)
     driver.execute_script("arguments[0].value = arguments[1];", input_el, compid)
-    driver.execute_script("arguments[0].dispatchEvent(new Event('change'));", input_el)
-    update_btn = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.ID, "update")))
+    driver.execute_script("arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", input_el)
+
+    driver.switch_to.default_content()
+    update_btn = _find_in_any_frame(driver, By.ID, "update", timeout=10)
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", update_btn)
     update_btn.click()
+
 
     # Give time for render
     WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "more-market-odds")))
