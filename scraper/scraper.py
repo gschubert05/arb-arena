@@ -2,6 +2,8 @@ import os
 import re
 import json
 import time
+import traceback
+import subprocess
 import datetime as dt
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -53,6 +55,33 @@ def make_driver() -> webdriver.Chrome:
 
     service = Service(os.getenv("CHROMEDRIVER_PATH"))
     return webdriver.Chrome(service=service, options=options)
+
+def _save_debug_html_png(driver, compid: int, tag: str):
+    """
+    Save current page_source and screenshot to server/data so the workflow can upload them.
+    tag should be short, e.g. "before", "after_get", "error".
+    """
+    try:
+        base_dir = os.path.dirname(DATA_PATH)
+        os.makedirs(base_dir, exist_ok=True)
+        html_path = os.path.join(base_dir, f"debug_comp_{compid}_{tag}.html")
+        png_path = os.path.join(base_dir, f"debug_comp_{compid}_{tag}.png")
+        # page_source may be large; still useful
+        try:
+            src = driver.page_source if hasattr(driver, "page_source") else "<no page_source>"
+            with open(html_path, "w", encoding="utf-8") as fh:
+                fh.write(src)
+        except Exception as e:
+            print(f"  ! Failed to save html for comp {compid}: {e}")
+
+        try:
+            driver.save_screenshot(png_path)
+        except Exception as e:
+            print(f"  ! Failed to save screenshot for comp {compid}: {e}")
+
+        print(f"  ! Saved debug files: {html_path} , {png_path}")
+    except Exception as exc:
+        print(f"  ! _save_debug_html_png failed: {exc}")
 
 
 def _find_in_any_frame(driver, by, value, timeout=15):
@@ -511,27 +540,102 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
 
     except Exception:
         return None
-
+        
 def run_once(comp_ids: List[int]) -> Dict[str, Any]:
-    driver = make_driver()
+    # start driver and capture environment / capabilities
+    driver = None
     all_rows: List[Dict[str, Any]] = []
     try:
+        try:
+            driver = make_driver()
+        except Exception as e:
+            print("Failed to start webdriver:", e)
+            print("Traceback:", traceback.format_exc())
+            # attempt to capture system chrome / chromedriver versions if possible
+            try:
+                v1 = subprocess.run(["google-chrome","--version"], capture_output=True, text=True)
+                v2 = subprocess.run(["chromedriver","--version"], capture_output=True, text=True)
+                env_debug = os.path.join(os.path.dirname(DATA_PATH), "debug_env.txt")
+                with open(env_debug, "w", encoding="utf-8") as f:
+                    f.write("google-chrome --version stdout:\n" + (v1.stdout or "") + "\nstderr:\n" + (v1.stderr or ""))
+                    f.write("\n\nchromedriver --version stdout:\n" + (v2.stdout or "") + "\nstderr:\n" + (v2.stderr or ""))
+                print("Wrote env debug to", env_debug)
+            except Exception as ee:
+                print("Failed to capture system chrome versions:", ee)
+            raise
+
+        # print capability snapshot to logs and to a file
+        try:
+            caps = getattr(driver, "capabilities", None)
+            print("Driver capabilities:", caps)
+            env_debug = os.path.join(os.path.dirname(DATA_PATH), "debug_env.txt")
+            with open(env_debug, "w", encoding="utf-8") as f:
+                f.write("ENV:\n")
+                for k in ("CHROME_BIN", "CHROMEDRIVER_PATH", "GITHUB_REF", "GITHUB_SHA"):
+                    f.write(f"{k}={os.environ.get(k)}\n")
+                f.write("\nSelenium capabilities:\n")
+                f.write(json.dumps(caps, indent=2, default=str) + "\n")
+        except Exception as e:
+            print("Failed writing capabilities:", e)
+
+        # main loop - keep behavior but capture debug per comp
         for compid in comp_ids:
             try:
                 print(f"Processing competition ID: {compid}")
-                rows = scrape_competition(driver, compid)
-                all_rows.extend(rows)
-                print(f"  + {len(rows)} rows")
-            except Exception as e:
-                print(f"  ! Error on compid {compid}: {e}")
 
-        # --------- NEW: enrich each arb with the bookies table ----------
+                # Save a quick snapshot BEFORE we hit the page (useful to see previous state)
+                try:
+                    _save_debug_html_png(driver, compid, "before")
+                except Exception:
+                    pass
+
+                rows = scrape_competition(driver, compid) or []
+                if rows:
+                    all_rows.extend(rows)
+                print(f"  + {len(rows)} rows")
+
+                # quick snapshot AFTER scraping that compid (to see final DOM)
+                try:
+                    _save_debug_html_png(driver, compid, "after")
+                except Exception:
+                    pass
+
+            except Exception as e:
+                # Print stacktrace to log
+                print(f"  ! Error on compid {compid}: {type(e).__name__}: {e}")
+                print(traceback.format_exc())
+
+                # Save debug html + screenshot from the current driver state
+                try:
+                    if driver is not None:
+                        _save_debug_html_png(driver, compid, "error")
+                except Exception as dbg_e:
+                    print("  ! _save_debug_html_png failed in exception handler:", dbg_e)
+
+                # Try a simple curl from the runner to confirm network / site reachability
+                try:
+                    curl_path = os.path.join(os.path.dirname(DATA_PATH), f"debug_comp_{compid}_curl.txt")
+                    curl_proc = subprocess.run(["curl", "-svS", "--max-time", "10", TARGET_URL],
+                                               capture_output=True, text=True)
+                    with open(curl_path, "w", encoding="utf-8") as f:
+                        f.write("STDOUT:\n" + (curl_proc.stdout or "") + "\n\nSTDERR:\n" + (curl_proc.stderr or ""))
+                    print(f"  ! Wrote curl debug to {curl_path}")
+                except Exception as curl_e:
+                    print("  ! curl check failed:", curl_e)
+
+                # continue to next compid (don't crash entire run)
+                continue
+
+        # --------- Verify with betting page, recalc ROI, and drop non-arbs ----------
         # Cache repeated URL+search_phrase so we don’t fetch the same page twice
         table_cache: Dict[Tuple[str, str], Optional[Dict[str, Any]]] = {}
+
+        filtered_rows: List[Dict[str, Any]] = []
         for it in all_rows:
             url = it.get("url")
             if not url:
-                continue  # skip, no betting link to scrape
+                filtered_rows.append(it)
+                continue
             phrase = it.get("search_phrase") or ""
             key = (url, phrase)
             if key not in table_cache:
@@ -539,10 +643,26 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
             table = table_cache[key]
             if table:
                 it["book_table"] = table
-        # ----------------------------------------------------------------
+                best = (table.get("best") or {})
+                L = (best.get("left")  or {}).get("odds")
+                R = (best.get("right") or {}).get("odds")
+                if isinstance(L, (int, float)) and isinstance(R, (int, float)) and L > 0 and R > 0:
+                    new_market_pct = ((1.0 / L) + (1.0 / R)) * 100.0
+                    if not (new_market_pct < 100.0):
+                        # discard if no longer an arb
+                        continue
+                    it["market_percentage"] = round(new_market_pct, 2)
+                    it["roi"] = round((1.0 / (new_market_pct / 100.0)) - 1.0, 6)
+            filtered_rows.append(it)
+        all_rows = filtered_rows
+        # --------------------------------------------------------------------------
 
     finally:
-        driver.quit()
+        try:
+            if driver is not None:
+                driver.quit()
+        except Exception:
+            pass
 
     # Sort ROI desc
     all_rows.sort(key=lambda r: r.get('roi', 0), reverse=True)
