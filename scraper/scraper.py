@@ -41,19 +41,19 @@ def parse_comp_ids(env_val: str | None) -> List[int]:
             out.append(int(p))
     return [i for i in out if i not in SKIP_IDS]
 
-
 def make_driver() -> webdriver.Chrome:
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless=old")  # use old headless mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1600,1200")
-    # UA helps avoid slimmed templates
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/124.0.0.0 Safari/537.36")
-    driver = webdriver.Chrome(options=options)
-    return driver
+
+    service = Service(os.getenv("CHROMEDRIVER_PATH"))
+    return webdriver.Chrome(service=service, options=options)
+
 
 def _find_in_any_frame(driver, by, value, timeout=15):
     """
