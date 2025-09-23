@@ -43,19 +43,33 @@ def parse_comp_ids(env_val: str | None) -> List[int]:
             out.append(int(p))
     return [i for i in out if i not in SKIP_IDS]
 
-def make_driver():
+
+def make_driver() -> webdriver.Chrome:
     options = Options()
-    # Required flags for GitHub Actions headless environment
-    options.add_argument("--headless=new")  # <- newer headless mode, required for recent Chrome
+
+    # Try legacy headless first (older behaviour). If you previously had "--headless=new",
+    # swap it to "--headless=chrome" or just "--headless".
+    options.add_argument("--headless=chrome")   # try this
+    # options.add_argument("--headless")        # alternative to try if above fails
+    # options.add_argument("--headless=new")    # keep for reference (some envs need it)
+
+    # recommended stable flags
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--remote-debugging-port=9222")  # helps debugging
 
-    driver = webdriver.Chrome(options=options)
+    chrome_bin = os.environ.get("CHROME_BIN")
+    if chrome_bin:
+        options.binary_location = chrome_bin
+
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+    service = Service(chromedriver_path, log_path="/tmp/chromedriver.log") if chromedriver_path else Service(log_path="/tmp/chromedriver.log")
+    driver = webdriver.Chrome(service=service, options=options)
     driver.set_page_load_timeout(30)
     return driver
-
 
 def _save_debug_html_png(driver, compid: int, tag: str):
     """
