@@ -42,14 +42,31 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
     return [i for i in out if i not in SKIP_IDS]
 
 
-def _find_in_any_frame(driver: webdriver.Chrome, by, value, timeout=15):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+def _find_any(driver: webdriver.Chrome, locators, per_try_timeout=2):
+    """Try a list of locator tuples in the current browsing context."""
+    for by, value in locators:
         try:
-            driver.switch_to.default_content()
-            return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
+            return WebDriverWait(driver, per_try_timeout).until(
+                EC.presence_of_element_located((by, value))
+            )
         except Exception:
             pass
+    raise TimeoutError("no locator matched in this context")
+
+def _find_in_any_frame(driver: webdriver.Chrome, locators, timeout=20):
+    """
+    Try to find any of the given locators in default content and then in each iframe.
+    `locators` is a list like [(By.NAME,"competitionid"), (By.ID,"competitionid"), ...]
+    """
+    end = time.time() + timeout
+    last_err = None
+    while time.time() < end:
+        try:
+            driver.switch_to.default_content()
+            return _find_any(driver, locators, per_try_timeout=2)
+        except Exception as e:
+            last_err = e
+
         # try each iframe
         try:
             frames = driver.find_elements(By.TAG_NAME, "iframe")
@@ -59,12 +76,15 @@ def _find_in_any_frame(driver: webdriver.Chrome, by, value, timeout=15):
             try:
                 driver.switch_to.default_content()
                 driver.switch_to.frame(fr)
-                return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
-            except Exception:
-                pass
+                return _find_any(driver, locators, per_try_timeout=2)
+            except Exception as e:
+                last_err = e
+                continue
+
         time.sleep(0.3)
+
     driver.switch_to.default_content()
-    raise TimeoutError(f"Could not locate {value} in any frame")
+    raise TimeoutError(f"Could not locate any of {locators!r} in any frame; last error: {last_err}")
 
 
 def extract_search_phrase(match_text: str) -> str:
@@ -96,6 +116,10 @@ def make_driver() -> webdriver.Chrome:
     options.add_argument("--no-default-browser-check")
     options.add_argument("--disable-extensions")
 
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+
     chrome_bin = os.environ.get("CHROME_BIN")
     if chrome_bin:
         options.binary_location = chrome_bin
@@ -108,16 +132,62 @@ def make_driver() -> webdriver.Chrome:
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     driver.get(TARGET_URL)
+    # after driver.get(TARGET_URL)
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
 
-    # Wait for compid input & update button (top-level OR inside an iframe)
-    input_el = _find_in_any_frame(driver, By.NAME, "compid", timeout=15)
-    driver.execute_script("arguments[0].value = arguments[1];", input_el, compid)
-    driver.execute_script("arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", input_el)
+    # Try multiple ways the site exposes the competition control:
+    comp_locators = [
+        (By.NAME, "competitionid"),
+        (By.ID,   "competitionid"),
+        (By.NAME, "competitionId"),
+        (By.ID,   "competitionId"),
+        (By.NAME, "compid"),           # fallback to your old one
+        (By.ID,   "compid"),
+        # sometimes it's a <select>:
+        (By.CSS_SELECTOR, 'select[name="competitionid"]'),
+        (By.CSS_SELECTOR, 'select#competitionid'),
+        (By.CSS_SELECTOR, 'select[name="competitionId"]'),
+        (By.CSS_SELECTOR, 'select#competitionId'),
+    ]
+
+    input_el = _find_in_any_frame(driver, comp_locators, timeout=30)
+
+    # If it's a <select>, set the value via JS; if it's an <input>, set .value
+    tag = (input_el.tag_name or "").lower()
+    if tag == "select":
+        driver.execute_script(
+            "const el=arguments[0]; el.value=String(arguments[1]); "
+            "el.dispatchEvent(new Event('change',{bubbles:true}));", input_el, compid
+        )
+    else:
+        driver.execute_script(
+            "const el=arguments[0]; el.value=String(arguments[1]); "
+            "el.dispatchEvent(new Event('input',{bubbles:true})); "
+            "el.dispatchEvent(new Event('change',{bubbles:true}));", input_el, compid
+        )
+
+    # Find an Update/Submit control with several fallbacks
+    update_locators = [
+        (By.ID, "update"),
+        (By.CSS_SELECTOR, 'input#update'),
+        (By.CSS_SELECTOR, 'button#update'),
+        (By.CSS_SELECTOR, 'input[type="submit"][value*="Update" i]'),
+        (By.XPATH, '//input[@type="submit" and contains(translate(@value,"UPDATE","update"),"update")]'),
+        (By.XPATH, '//button[contains(translate(.,"UPDATE","update"),"update")]'),
+    ]
 
     driver.switch_to.default_content()
-    update_btn = _find_in_any_frame(driver, By.ID, "update", timeout=10)
+    update_btn = _find_in_any_frame(driver, update_locators, timeout=20)
+
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", update_btn)
-    update_btn.click()
+    try:
+        update_btn.click()
+    except Exception:
+        # sometimes a JS handler blocks default; try JS click
+        driver.execute_script("arguments[0].click();", update_btn)
+
 
     WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "more-market-odds")))
     time.sleep(1.0)
