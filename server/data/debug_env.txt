@@ -1,0 +1,37 @@
+ENV:
+CHROME_BIN=None
+CHROMEDRIVER_PATH=None
+GITHUB_REF=None
+GITHUB_SHA=None
+
+Selenium capabilities:
+{
+  "acceptInsecureCerts": false,
+  "browserName": "chrome",
+  "browserVersion": "140.0.7339.185",
+  "chrome": {
+    "chromedriverVersion": "140.0.7339.185 (eeea00e459e8b6cd69698eda5b236a0d4cb3234d-refs/branch-heads/7339_150@{#3})",
+    "userDataDir": "C:\\Users\\gabri\\AppData\\Local\\Temp\\scoped_dir21540_1336605623"
+  },
+  "fedcm:accounts": true,
+  "goog:chromeOptions": {
+    "debuggerAddress": "localhost:54652"
+  },
+  "networkConnectionEnabled": false,
+  "pageLoadStrategy": "normal",
+  "platformName": "windows",
+  "proxy": {},
+  "setWindowRect": true,
+  "strictFileInteractability": false,
+  "timeouts": {
+    "implicit": 0,
+    "pageLoad": 300000,
+    "script": 30000
+  },
+  "unhandledPromptBehavior": "dismiss and notify",
+  "webauthn:extension:credBlob": true,
+  "webauthn:extension:largeBlob": true,
+  "webauthn:extension:minPinLength": true,
+  "webauthn:extension:prf": true,
+  "webauthn:virtualAuthenticators": true
+}

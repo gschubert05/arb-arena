@@ -1,0 +1,42 @@
+name: Test Scraper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Install Chrome + Chromedriver
+      - id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+          install-chromedriver: true
+
+      - name: Export Chrome paths
+        run: |
+          echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PATH=${{ steps.setup-chrome.outputs.chromedriver-path }}" >> $GITHUB_ENV
+
+      - name: Install Selenium
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run scraper under Xvfb
+        run: |
+          nohup Xvfb :99 -screen 0 1280x1024x24 >/tmp/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          python test-scraper.py

@@ -19,6 +19,7 @@ env:
   RAW_JSON_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/opportunities.json"
   RAW_SEEN_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/seen_keys.json"
   RAW_ACTIVE_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/active_comp_ids.json"
+  # Only notify when BOTH best bookies are in this allow-list (case-insensitive)
   NOTIFY_BOOKIES: "sportsbet,bet365,neds,tab"
 
 jobs:
@@ -33,28 +34,23 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Install Chrome + Chromedriver
-      - name: Set up Chrome
-        id: setup-chrome
+      # Chrome for Testing + matching ChromeDriver
+      - id: setup-chrome
         uses: browser-actions/setup-chrome@v2
         with:
           chrome-version: stable
           install-dependencies: true
           install-chromedriver: true
 
-      # Export Chrome paths
-      - name: Export Chrome env vars
+      - name: Export Chrome paths
         run: |
           echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
           echo "CHROMEDRIVER_PATH=${{ steps.setup-chrome.outputs.chromedriver-path }}" >> $GITHUB_ENV
-
-      # Install Python dependencies
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
           pip install -r scraper/requirements.txt
 
-      # Load active competition IDs (fallback to defaults)
       - name: Load active competition IDs
         run: |
           mkdir -p server/data
@@ -72,10 +68,12 @@ jobs:
           echo "COMP_IDS=${COMP_IDS}" >> $GITHUB_ENV
           echo "Loaded COMP_IDS=${COMP_IDS}"
 
-      # Run scraper under Xvfb (non-headless)
-      - name: Run scraper (FAST set)
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run scraper (FAST set) under Xvfb, non-headless mode
         env:
-          COMP_IDS: "${{ env.COMP_IDS || '10,11,40,41' }}"
+          COMP_IDS: "${{ env.COMP_IDS || vars.COMP_IDS || '10,11,40,41' }}"
           FORCE_HEADLESS: "false"
         run: |
           sudo apt-get update && sudo apt-get install -y xvfb
@@ -83,23 +81,134 @@ jobs:
           export DISPLAY=:99
           python scraper/scraper.py
 
-      # Load previous state
+
       - name: Load previous state
         run: |
           curl -fsSL "$RAW_JSON_URL" -o prev.json || echo "{}" > prev.json
           curl -fsSL "$RAW_SEEN_URL" -o seen_keys.json || echo "[]" > seen_keys.json
 
-      # Compute new arbs and notify
-      - name: Compute new arbs and notify
+      - name: Compute new arbs and notify (filtered bookies)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           ROI_THRESHOLD_PCT:  ${{ env.ROI_THRESHOLD_PCT }}
           NOTIFY_BOOKIES:     ${{ env.NOTIFY_BOOKIES }}
-        run: python scripts/notify.py  # (your long inline Python should live in scraper/scripts/notify.py)
+        run: |
+          python - << 'PY'
+          import json, os, re, subprocess
 
-      # Upload debug artifacts
+          ROI_THRESHOLD_PCT = float(os.environ.get("ROI_THRESHOLD_PCT","2.0"))
+          THRESH = ROI_THRESHOLD_PCT / 100.0
+
+          # Normalize agency names: lowercase, strip spaces, drop (...) and any suffix after '-'
+          def norm_agency(a: str) -> str:
+              a = (a or "")
+              a = re.sub(r"\(.*?\)", "", a)  # remove parenthetical
+              a = a.split('-', 1)[0]         # remove suffix after hyphen
+              a = a.strip().lower().replace(" ", "")
+              return a
+
+          # Build allow set from env (case-insens., spaces ignored)
+          allow_csv = os.environ.get("NOTIFY_BOOKIES", "sportsbet,bet365,neds,tab")
+          ALLOW = { norm_agency(x) for x in allow_csv.split(",") if x.strip() }
+
+          def load_json(path, default):
+              try:
+                  with open(path, "r", encoding="utf-8") as f:
+                      return json.load(f)
+              except Exception:
+                  return default
+
+          cur = load_json("server/data/opportunities.json", {"items":[]})
+          if isinstance(cur, list):
+              cur = {"items": cur}
+          items = cur.get("items", [])
+
+          seen = load_json("seen_keys.json", [])
+          seen_set = set(seen if isinstance(seen, list) else [])
+
+          def key(it):
+              def n(x): return (x or "").strip().lower()
+              return "|".join([
+                  str(it.get("competitionid") or it.get("competitionId") or ""),
+                  n(it.get("sport")), n(it.get("game")), n(it.get("market")),
+                  n(it.get("match")), it.get("dateISO") or it.get("date") or ""
+              ])
+
+          new_hits = []
+          for it in items:
+              try:
+                  roi = float(it.get("roi") or 0.0)
+              except:
+                  roi = 0.0
+              if roi < THRESH:
+                  continue
+
+              best = (it.get("book_table") or {}).get("best") or {}
+              L = best.get("left")  or {}
+              R = best.get("right") or {}
+              if not (L.get("agency") and R.get("agency") and L.get("odds") and R.get("odds")):
+                  continue
+
+              # Bookie allow-list filter: require BOTH sides in allow set
+              left_ok  = norm_agency(L["agency"]) in ALLOW
+              right_ok = norm_agency(R["agency"]) in ALLOW
+              if not (left_ok and right_ok):
+                  continue
+
+              k = key(it)
+              if k in seen_set:
+                  continue
+              new_hits.append(it)
+              seen_set.add(k)
+
+          with open("seen_keys.json", "w", encoding="utf-8") as f:
+              json.dump(sorted(list(seen_set)), f, ensure_ascii=False, indent=0)
+
+          if not new_hits:
+              raise SystemExit(0)
+
+          new_hits.sort(key=lambda x: float(x.get('roi') or 0), reverse=True)
+
+          def fmt(it):
+              best = it["book_table"]["best"]
+              L, R = best["left"], best["right"]
+              sport = it.get("sport") or ""
+              game  = it.get("game") or ""
+              market= it.get("market") or ""
+              match = it.get("match") or ""
+              date  = it.get("date") or it.get("dateISO") or ""
+              roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
+              line1 = f"⚡ {sport}"
+              line2 = f"{game} — {market}"
+              line3 = f"{match}"
+              line4 = f"{L['agency']} @ {float(L['odds']):.2f}  |  {R['agency']} @ {float(R['odds']):.2f}"
+              line5 = f"ROI: {roi_pct}  |  {date}"
+              return "\n".join([line1, line2, line3, line4, line5])
+
+          msg = "New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(fmt(it) for it in new_hits[:8])
+          open("msg.txt","w",encoding="utf-8").write(msg)
+
+          tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+          chat= os.environ.get("TELEGRAM_CHAT_ID")
+          if tok and chat:
+              api = f"https://api.telegram.org/bot{tok}/sendMessage"
+              subprocess.run([
+                  "curl","-fsS","-X","POST",api,
+                  "-d", f"chat_id={chat}",
+                  "--data-urlencode","disable_web_page_preview=true",
+                  "--data-urlencode", f"text={msg}"
+              ], check=False)
+
+          wh = os.environ.get("DISCORD_WEBHOOK_URL")
+          if wh:
+              payload = json.dumps({"content": msg})
+              subprocess.run([
+                  "curl","-fsS","-H","Content-Type: application/json",
+                  "-d", payload, wh
+              ], check=False)
+          PY
       - name: Upload debug artifacts (if any)
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,16 +219,13 @@ jobs:
             server/data/debug_comp_*.png
             server/data/debug_comp_*_curl.txt
             server/data/debug_env.txt
-
-      # Stage seen_keys for commit
       - name: Place seen_keys.json where we commit it from
         run: |
           mkdir -p server/data
           test -f seen_keys.json || echo "[]" > seen_keys.json
           mv -f seen_keys.json server/data/seen_keys.json
 
-      # Publish JSON + seen_keys (and active IDs) to data branch
-      - name: Publish data to branch
+      - name: Publish JSON + seen_keys to data branch
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
