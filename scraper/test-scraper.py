@@ -9,16 +9,21 @@ def main():
     chrome_opts.add_argument("--disable-dev-shm-usage")
     chrome_opts.add_argument("--disable-gpu")
 
-    # Run in headed mode (not --headless) but under Xvfb
+    # Run in headed mode under Xvfb
     driver = webdriver.Chrome(options=chrome_opts)
 
     try:
-        driver.get("https://en.wikipedia.org/wiki/Main_Page")
+        url = "https://www.aussportsbetting.com/multibet/"
+        driver.get(url)
         print("Page title is:", driver.title)
 
-        # Just grab one element to prove scraping works
-        el = driver.find_element(By.ID, "mp-welcome")
-        print("Found element text:", el.text[:80])
+        # Try grab the H1 heading if it exists
+        try:
+            h1 = driver.find_element(By.TAG_NAME, "h1")
+            print("Found H1 text:", h1.text)
+        except Exception as e:
+            print("Could not find H1 element:", e)
+
     finally:
         driver.quit()
 
