@@ -3,7 +3,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
 
 TARGET_URL = "http://odds.aussportsbetting.com/multibet"
 
@@ -13,9 +12,8 @@ def make_driver():
     options.add_argument("--window-size=1600,1200")
     return webdriver.Chrome(options=options)
 
-def test_compid(compid: int):
+def scrape_afl_odds(compid=11):
     driver = make_driver()
-    result = {}
     try:
         driver.get(TARGET_URL)
         print("Page loaded:", driver.title)
@@ -38,28 +36,29 @@ def test_compid(compid: int):
         update_btn.click()
         print("Clicked update button")
 
-        # Wait for page to update
+        # Wait for odds table to populate
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "more-market-odds"))
+            EC.presence_of_element_located((By.CLASS_NAME, "marketRow"))
         )
         print("Page updated, compid selection works!")
 
-        # --- Return something simple as proof ---
-        # Get selected sport
-        sport_select = driver.find_element(By.NAME, "sport")
-        selected_option = sport_select.get_attribute("value")
-        result["selected_sport"] = selected_option
+        # Scrape matches
+        matches = driver.find_elements(By.CLASS_NAME, "marketRow")
+        odds_list = []
+        for match in matches[:5]:  # just first 5 for testing
+            try:
+                teams = match.find_element(By.CLASS_NAME, "marketName").text.strip()
+                odds_cells = match.find_elements(By.CLASS_NAME, "marketPrice")
+                odds = [cell.text.strip() for cell in odds_cells]
+                odds_list.append({"teams": teams, "odds": odds})
+            except:
+                continue
 
-        # Grab first odds text if present
-        first_odds = driver.find_elements(By.ID, "more-market-odds")
-        if first_odds:
-            result["first_odds_text"] = first_odds[0].text.strip()
-
-        return result
+        return odds_list
 
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    output = test_compid(11)
-    print("Result:", output)
+    afl_odds = scrape_afl_odds(11)
+    print("Sample AFL Odds:", afl_odds)
