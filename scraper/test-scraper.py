@@ -12,53 +12,32 @@ def make_driver():
     options.add_argument("--window-size=1600,1200")
     return webdriver.Chrome(options=options)
 
-def scrape_afl_odds(compid=11):
-    driver = make_driver()
-    try:
-        driver.get(TARGET_URL)
-        print("Page loaded:", driver.title)
+import os
+import json
+from your_scraper_module import make_driver, scrape_competition, DATA_PATH
 
-        # Set compid
-        input_el = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "compid"))
-        )
-        driver.execute_script(
-            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
-            input_el,
-            compid
-        )
-        print(f"Set compid to {compid}")
+# Use compid=11 (AFL)
+compid = 11
 
-        # Click update
-        update_btn = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.ID, "update"))
-        )
-        update_btn.click()
-        print("Clicked update button")
+# Start driver
+driver = make_driver()
+try:
+    # Scrape full competition (odds, market, games)
+    rows = scrape_competition(driver, compid)
 
-        # Wait for odds table to populate
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "marketRow"))
-        )
-        print("Page updated, compid selection works!")
+    if not rows:
+        print("No rows found for compid", compid)
+    else:
+        print(f"Found {len(rows)} odds rows for compid {compid}")
 
-        # Scrape matches
-        matches = driver.find_elements(By.CLASS_NAME, "marketRow")
-        odds_list = []
-        for match in matches[:5]:  # just first 5 for testing
-            try:
-                teams = match.find_element(By.CLASS_NAME, "marketName").text.strip()
-                odds_cells = match.find_elements(By.CLASS_NAME, "marketPrice")
-                odds = [cell.text.strip() for cell in odds_cells]
-                odds_list.append({"teams": teams, "odds": odds})
-            except:
-                continue
+    # Save a quick JSON dump (like your main scraper does)
+    payload = {"lastUpdated": "manual-test", "items": rows}
+    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
+    test_path = os.path.join(os.path.dirname(DATA_PATH), f"debug_comp_{compid}_test.json")
+    with open(test_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    print(f"Wrote {len(rows)} rows to {test_path}")
 
-        return odds_list
+finally:
+    driver.quit()
 
-    finally:
-        driver.quit()
-
-if __name__ == "__main__":
-    afl_odds = scrape_afl_odds(11)
-    print("Sample AFL Odds:", afl_odds)
