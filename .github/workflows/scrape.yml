@@ -55,14 +55,14 @@ jobs:
           mkdir -p server/data
           curl -fsSL "$RAW_ACTIVE_URL" -o server/data/active_comp_ids.json || echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
           COMP_IDS=$(python - <<'PY'
-import json
-try:
-    d = json.load(open("server/data/active_comp_ids.json","r",encoding="utf-8"))
-    ids = d.get("active_comp_ids", [])
-    print(",".join(str(x) for x in ids))
-except Exception:
-    print("")
-PY
+          import json
+          try:
+            d = json.load(open("server/data/active_comp_ids.json","r",encoding="utf-8"))
+            ids = d.get("active_comp_ids", [])
+            print(",".join(str(x) for x in ids))
+            except Exception:
+            print("")
+          PY
           )
           echo "COMP_IDS=${COMP_IDS}" >> $GITHUB_ENV
           echo "Loaded COMP_IDS=${COMP_IDS}"
