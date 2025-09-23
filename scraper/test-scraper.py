@@ -13,7 +13,7 @@ def main():
     driver = webdriver.Chrome(options=chrome_opts)
 
     try:
-        url = "https://www.aussportsbetting.com/multibet/"
+        url = "https://www.odds.aussportsbetting.com/multibet/"
         driver.get(url)
         print("Page title is:", driver.title)
 
