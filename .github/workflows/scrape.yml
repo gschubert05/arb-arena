@@ -1,31 +1,24 @@
-name: Scrape (FAST + notify)
+name: Test Scraper (built-up)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "2-59/5 * * * *"   # every 5 minutes, starting at :02 UTC
 
 permissions:
   contents: write
 
-concurrency:
-  group: scrape-arena
-  cancel-in-progress: true
-
 env:
+  # Defaults you can override in Actions vars/secrets
+  COMP_IDS: "10,11"                 # e.g. "10,11,40,41" or "1-150"
   ROI_THRESHOLD_PCT: "2.0"
+  NOTIFY_BOOKIES: "sportsbet,bet365,neds,tab"
   PUBLISH_JSON_PATH: "server/data/opportunities.json"
   SEEN_KEYS_PATH: "server/data/seen_keys.json"
   RAW_JSON_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/opportunities.json"
   RAW_SEEN_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/seen_keys.json"
-  RAW_ACTIVE_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/active_comp_ids.json"
-  # Only notify when BOTH best bookies are in this allow-list (case-insensitive)
-  NOTIFY_BOOKIES: "sportsbet,bet365,neds,tab"
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +27,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Chrome + matching ChromeDriver
+      # Install Chrome + Chromedriver (same model as your working test)
       - id: setup-chrome
         uses: browser-actions/setup-chrome@v2
         with:
@@ -50,172 +43,41 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          # Keep deps minimal like the working test job
           pip install selenium beautifulsoup4 lxml
 
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      - name: Load active competition IDs
-        run: |
-          mkdir -p server/data
-          if curl -fsSL "$RAW_ACTIVE_URL" -o server/data/active_comp_ids.json; then
-            echo "Active comp IDs loaded from data branch."
-          else
-            echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
-          fi
-
-          # Export COMP_IDS to $GITHUB_ENV using a tab-stripping heredoc (<<-)
-          python - <<-'PY' >> $GITHUB_ENV
-          	import json
-          	try:
-          	    d = json.load(open('server/data/active_comp_ids.json','r',encoding='utf-8'))
-          	    ids = d.get('active_comp_ids', [])
-          	    val = ','.join(str(x) for x in ids)
-          	    print('COMP_IDS=' + val)
-          	except Exception:
-          	    print('COMP_IDS=')
-          PY
-
-          # Fallback if none provided
-          grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
-          echo "Using COMP_IDS=$COMP_IDS"
-
       - name: Test DNS / curl
         run: curl -v http://odds.aussportsbetting.com/multibet
 
-      - name: Run scraper under Xvfb (headless Chrome)
+      - name: Run scraper under Xvfb
         env:
-          # Set to "false" to run non-headless inside Xvfb
-          FORCE_HEADLESS: "true"
+          COMP_IDS: ${{ env.COMP_IDS }}
         run: |
           nohup Xvfb :99 -screen 0 1280x1024x24 >/tmp/xvfb.log 2>&1 &
           export DISPLAY=:99
+          # Runs the full scraper you built from the test version
           python scraper/scraper.py
 
-      - name: Load previous state
+      - name: Load previous state (for notifications)
         run: |
           curl -fsSL "$RAW_JSON_URL" -o prev.json || echo '{}' > prev.json
           curl -fsSL "$RAW_SEEN_URL" -o seen_keys.json || echo '[]' > seen_keys.json
 
-      - name: Compute new arbs and notify (filtered bookies)
+      - name: Notify about new arbs (Telegram/Discord)
         env:
+          ROI_THRESHOLD_PCT:  ${{ env.ROI_THRESHOLD_PCT }}
+          NOTIFY_BOOKIES:     ${{ env.NOTIFY_BOOKIES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          ROI_THRESHOLD_PCT:  ${{ env.ROI_THRESHOLD_PCT }}
-          NOTIFY_BOOKIES:     ${{ env.NOTIFY_BOOKIES }}
         run: |
-          python - <<-'PY'
-          	import json, os, re, subprocess
-          	ROI_THRESHOLD_PCT = float(os.environ.get("ROI_THRESHOLD_PCT","2.0"))
-          	THRESH = ROI_THRESHOLD_PCT / 100.0
-          
-          	def norm_agency(a: str) -> str:
-          	    a = (a or "")
-          	    a = re.sub(r"\(.*?\)", "", a)  # remove parenthetical
-          	    a = a.split('-', 1)[0]         # remove suffix after hyphen
-          	    a = a.strip().lower().replace(" ", "")
-          	    return a
-          
-          	allow_csv = os.environ.get("NOTIFY_BOOKIES", "sportsbet,bet365,neds,tab")
-          	ALLOW = { norm_agency(x) for x in allow_csv.split(",") if x.strip() }
-          
-          	def load_json(path, default):
-          	    try:
-          	        with open(path, "r", encoding="utf-8") as f:
-          	            return json.load(f)
-          	    except Exception:
-          	        return default
-          
-          	cur = load_json("server/data/opportunities.json", {"items":[]})
-          	if isinstance(cur, list):
-          	    cur = {"items": cur}
-          	items = cur.get("items", [])
-          
-          	seen = load_json("seen_keys.json", [])
-          	seen_set = set(seen if isinstance(seen, list) else [])
-          
-          	def key(it):
-          	    def n(x): return (x or "").strip().lower()
-          	    return "|".join([
-          	        str(it.get("competitionid") or it.get("competitionId") or ""),
-          	        n(it.get("sport")), n(it.get("game")), n(it.get("market")),
-          	        n(it.get("match")), it.get("dateISO") or it.get("date") or ""
-          	    ])
-          
-          	new_hits = []
-          	for it in items:
-          	    try:
-          	        roi = float(it.get("roi") or 0.0)
-          	    except:
-          	        roi = 0.0
-          	    if roi < THRESH:
-          	        continue
-          
-          	    best = (it.get("book_table") or {}).get("best") or {}
-          	    L = best.get("left")  or {}
-          	    R = best.get("right") or {}
-          	    if not (L.get("agency") and R.get("agency") and L.get("odds") and R.get("odds")):
-          	        continue
-          
-          	    left_ok  = norm_agency(L["agency"]) in ALLOW
-          	    right_ok = norm_agency(R["agency"]) in ALLOW
-          	    if not (left_ok and right_ok):
-          	        continue
-          
-          	    k = key(it)
-          	    if k in seen_set:
-          	        continue
-          	    new_hits.append(it)
-          	    seen_set.add(k)
-          
-          	with open("seen_keys.json", "w", encoding="utf-8") as f:
-          	    json.dump(sorted(list(seen_set)), f, ensure_ascii=False, indent=0)
-          
-          	if not new_hits:
-          	    raise SystemExit(0)
-          
-          	new_hits.sort(key=lambda x: float(x.get('roi') or 0), reverse=True)
-          
-          	def fmt(it):
-          	    best = it["book_table"]["best"]
-          	    L, R = best["left"], best["right"]
-          	    sport = it.get("sport") or ""
-          	    game  = it.get("game") or ""
-          	    market= it.get("market") or ""
-          	    match = it.get("match") or ""
-          	    date  = it.get("date") or it.get("dateISO") or ""
-          	    roi_pct = f"{(float(it.get('roi') or 0)*100):.2f}%"
-          	    line1 = f"⚡ {sport}"
-          	    line2 = f"{game} — {market}"
-          	    line3 = f"{match}"
-          	    line4 = f"{L['agency']} @ {float(L['odds']):.2f}  |  {R['agency']} @ {float(R['odds']):.2f}"
-          	    line5 = f"ROI: {roi_pct}  |  {date}"
-          	    return "\n".join([line1, line2, line3, line4, line5])
-          
-          	msg = "New arbs over threshold (" + str(ROI_THRESHOLD_PCT) + "%)\n\n" + "\n\n".join(fmt(it) for it in new_hits[:8])
-          	open("msg.txt","w",encoding="utf-8").write(msg)
-          
-          	tok = os.environ.get("TELEGRAM_BOT_TOKEN")
-          	chat= os.environ.get("TELEGRAM_CHAT_ID")
-          	if tok and chat:
-          	    api = f"https://api.telegram.org/bot{tok}/sendMessage"
-          	    subprocess.run([
-          	        "curl","-fsS","-X","POST",api,
-          	        "-d", f"chat_id={chat}",
-          	        "--data-urlencode","disable_web_page_preview=true",
-          	        "--data-urlencode", f"text={msg}"
-          	    ], check=False)
-          
-          	wh = os.environ.get("DISCORD_WEBHOOK_URL")
-          	if wh:
-          	    payload = json.dumps({"content": msg})
-          	    subprocess.run([
-          	        "curl","-fsS","-H","Content-Type: application/json",
-          	        "-d", payload, wh
-          	    ], check=False)
-          PY
+          python scripts/notify.py \
+            --input "server/data/opportunities.json" \
+            --seen "seen_keys.json" \
+            --roi-threshold-pct "${ROI_THRESHOLD_PCT}" \
+            --notify-bookies "${NOTIFY_BOOKIES}"
 
       - name: Place seen_keys.json where we commit it from
         run: |
@@ -223,6 +85,7 @@ jobs:
           test -f seen_keys.json || echo "[]" > seen_keys.json
           mv -f seen_keys.json server/data/seen_keys.json
 
+      # Optional: publish JSON + seen_keys to data branch (comment out if not needed)
       - name: Publish JSON + seen_keys to data branch
         run: |
           git config user.name "github-actions"
@@ -232,6 +95,5 @@ jobs:
           mkdir -p server/data
           git add -f "$PUBLISH_JSON_PATH"
           git add -f "$SEEN_KEYS_PATH"
-          test -f server/data/active_comp_ids.json && git add -f server/data/active_comp_ids.json || true
-          git commit -m "fast: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
+          git commit -m "test-scrape: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data --force
