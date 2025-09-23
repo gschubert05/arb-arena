@@ -68,10 +68,21 @@ jobs:
           echo "COMP_IDS=${COMP_IDS}" >> $GITHUB_ENV
           echo "Loaded COMP_IDS=${COMP_IDS}"
 
-      - name: Run scraper (FAST set)
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run scraper (FAST set) under Xvfb
         env:
           COMP_IDS: "${{ env.COMP_IDS || vars.COMP_IDS || '10,11,40,41' }}"
-        run: python scraper/scraper.py
+        run: |
+          # start Xvfb on display :99 (background)
+          nohup Xvfb :99 -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+          export DISPLAY=:99
+          # optional: dump Xvfb logs to workspace for debugging
+          cat /tmp/xvfb.log || true
+          # run your python scraper (use xvfb-run instead if you prefer)
+          python scraper/scraper.py
+
 
       - name: Load previous state
         run: |
