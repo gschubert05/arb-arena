@@ -37,7 +37,7 @@ jobs:
 
       - name: Test DNS / curl
         run: |
-          curl -v http://www.odds.aussportsbetting.com/multibet
+          curl -v http://odds.aussportsbetting.com/betting?competitionid=40
 
 
       - name: Run scraper under Xvfb
