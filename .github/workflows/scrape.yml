@@ -200,7 +200,16 @@ jobs:
                   "-d", payload, wh
               ], check=False)
           PY
-
+      - name: Upload debug artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-debug
+          path: |
+            server/data/debug_comp_*.html
+            server/data/debug_comp_*.png
+            server/data/debug_comp_*_curl.txt
+            server/data/debug_env.txt
       - name: Place seen_keys.json where we commit it from
         run: |
           mkdir -p server/data
