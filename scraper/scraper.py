@@ -43,37 +43,6 @@ def parse_comp_ids(env_val: str | None) -> List[int]:
             out.append(int(p))
     return [i for i in out if i not in SKIP_IDS]
 
-
-def make_driver() -> webdriver.Chrome:
-    options = Options()
-
-    # Try non-headless under Xvfb if flag set
-    headless_env = os.environ.get("FORCE_HEADLESS", "true").lower()
-    if headless_env in ("true", "1", "yes"):
-        options.add_argument("--headless=chrome")
-    # else: no headless
-
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--window-size=2560,1440")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--remote-allow-origins=*")
-    options.add_argument("--enable-logging")
-    options.add_argument("--v=1")
-
-    chrome_bin = os.environ.get("CHROME_BIN")
-    if chrome_bin:
-        options.binary_location = chrome_bin
-
-    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
-    service = Service(chromedriver_path) if chromedriver_path else None
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(30)
-    return driver
-
-
 def _save_debug_html_png(driver, compid: int, tag: str):
     """
     Save current page_source and screenshot to server/data so the workflow can upload them.
@@ -209,6 +178,11 @@ def make_driver() -> webdriver.Chrome:
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/124.0.0.0 Safari/537.36")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
+
 
     # ✅ Use the Chrome that setup-chrome installed (matches its Chromedriver)
     chrome_bin = os.environ.get("CHROME_BIN")
