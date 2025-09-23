@@ -39,4 +39,4 @@ jobs:
         run: |
           nohup Xvfb :99 -screen 0 1280x1024x24 >/tmp/xvfb.log 2>&1 &
           export DISPLAY=:99
-          python test-scraper.py
+          python scraper/test-scraper.py
