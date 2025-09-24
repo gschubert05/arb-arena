@@ -21,7 +21,6 @@ env:
   SEEN_KEYS_PATH: "server/data/seen_keys.json"
   RAW_JSON_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/opportunities.json"
   RAW_SEEN_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/seen_keys.json"
-  RAW_ACTIVE_URL: "https://raw.githubusercontent.com/${{ github.repository }}/data/server/data/active_comp_ids.json"
 
 jobs:
   scrape:
@@ -29,6 +28,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # we will read from the 'data' branch
 
       - uses: actions/setup-python@v5
         with:
@@ -55,29 +56,25 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # ✅ Load COMP_IDS directly from the data branch, without writing any file locally
       - name: Load active competition IDs
         run: |
-          mkdir -p server/data
-          if curl -fsSL "$RAW_ACTIVE_URL" -o server/data/active_comp_ids.json; then
-            echo "Active comp IDs loaded from data branch."
-          else
-            echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
-          fi
-
-          # IMPORTANT: heredoc body is flush-left (no leading spaces), so Python doesn't see indentation
-          python - <<'PY' >> $GITHUB_ENV
-          import json
+          git fetch origin data:data || true
+          COMP_CSV=$(git show data:server/data/active_comp_ids.json 2>/dev/null | python - <<'PY'
+          import sys, json
           try:
-              with open('server/data/active_comp_ids.json','r',encoding='utf-8') as f:
-                  d = json.load(f)
+              d = json.load(sys.stdin)
               ids = d.get('active_comp_ids', [])
-              print('COMP_IDS=' + ','.join(str(x) for x in ids))
+              print(",".join(str(x) for x in ids))
           except Exception:
-              print('COMP_IDS=')
+              print("")
           PY
-
-          # Fallback if none provided
-          grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
+          )
+          if [ -n "$COMP_CSV" ]; then
+            echo "COMP_IDS=$COMP_CSV" >> $GITHUB_ENV
+          else
+            echo "COMP_IDS=10,11" >> $GITHUB_ENV
+          fi
           echo "Using COMP_IDS=$COMP_IDS"
 
       - name: Test DNS / curl
