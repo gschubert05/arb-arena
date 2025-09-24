@@ -64,18 +64,19 @@ jobs:
             echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
           fi
 
+          # IMPORTANT: heredoc body is flush-left (no leading spaces), so Python doesn't see indentation
           python - <<'PY' >> $GITHUB_ENV
-            if 1:
-                import json
-                try:
-                    with open('server/data/active_comp_ids.json','r',encoding='utf-8') as f:
-                        d = json.load(f)
-                    ids = d.get('active_comp_ids', [])
-                    print('COMP_IDS=' + ','.join(str(x) for x in ids))
-                except Exception:
-                    print('COMPIDS=')
-          PY
+import json
+try:
+    with open('server/data/active_comp_ids.json','r',encoding='utf-8') as f:
+        d = json.load(f)
+    ids = d.get('active_comp_ids', [])
+    print('COMP_IDS=' + ','.join(str(x) for x in ids))
+except Exception:
+    print('COMP_IDS=')
+PY
 
+          # Fallback if none provided
           grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
           echo "Using COMP_IDS=$COMP_IDS"
 
