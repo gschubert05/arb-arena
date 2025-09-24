@@ -64,19 +64,18 @@ jobs:
             echo '{"active_comp_ids":[]}' > server/data/active_comp_ids.json
           fi
 
-          # Export COMP_IDS to $GITHUB_ENV using a tab-stripping heredoc (<<-)
-          python - <<-'PY' >> $GITHUB_ENV
-            import json
-            try:
-                d = json.load(open('server/data/active_comp_ids.json','r',encoding='utf-8'))
-                ids = d.get('active_comp_ids', [])
-                val = ','.join(str(x) for x in ids)
-                print('COMP_IDS=' + val)
-            except Exception:
-                print('COMP_IDS=')
+          python - <<'PY' >> $GITHUB_ENV
+            if 1:
+                import json
+                try:
+                    with open('server/data/active_comp_ids.json','r',encoding='utf-8') as f:
+                        d = json.load(f)
+                    ids = d.get('active_comp_ids', [])
+                    print('COMP_IDS=' + ','.join(str(x) for x in ids))
+                except Exception:
+                    print('COMPIDS=')
           PY
 
-          # Fallback if none provided
           grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
           echo "Using COMP_IDS=$COMP_IDS"
 
