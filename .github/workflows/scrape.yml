@@ -76,8 +76,8 @@ jobs:
                     print('COMPIDS=')
           PY
 
-          grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
-          echo "Using COMP_IDS=$COMP_IDS"
+    grep -E '^COMP_IDS=' $GITHUB_ENV || echo 'COMP_IDS=10,11' >> $GITHUB_ENV
+    echo "Using COMP_IDS=$COMP_IDS"
 
       - name: Test DNS / curl
         run: curl -v http://odds.aussportsbetting.com/multibet
