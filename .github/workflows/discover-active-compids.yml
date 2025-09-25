@@ -42,7 +42,7 @@ jobs:
         run: |
           mkdir -p server/data
           python scraper/discover_active_compids.py \
-            --range "1-10" --skip "72,73,108,114" \
+            --range "1-150" --skip "72,73,108,114" \
             --out server/data/active_comp_ids.json -v
 
       # ✅ Publish ONLY active_comp_ids.json via a separate worktree (no branch switching in-place)
