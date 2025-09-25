@@ -30,7 +30,7 @@ const state = {
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
   _agencies: [],
   _sports: [],
-  _leagues: [], // this will hold the display names returned in `competitionIds`
+  _leagues: [], // array of league names (strings)
 };
 
 const els = {
@@ -68,7 +68,7 @@ const els = {
   sportsSelectAll: document.getElementById('sportsSelectAll'),
   sportsSelectedCount: document.getElementById('sportsSelectedCount'),
 
-  // Leagues dropdown UI (still driven by `competitionIds`)
+  // Leagues dropdown UI
   leaguesWrapper: document.getElementById('leaguesWrapper'),
   leaguesDropdown: document.getElementById('leaguesDropdown'),
   leaguesSummary: document.getElementById('leaguesSummary'),
@@ -97,7 +97,7 @@ function qs() {
   };
   addCsv(state.selectedBookies, state._agencies, 'bookies');
   addCsv(state.selectedSports, state._sports, 'sports');
-  addCsv(state.selectedLeagues, state._leagues, 'competitionIds'); // keep the old param
+  addCsv(state.selectedLeagues, state._leagues, 'leagues'); // <-- send leagues by name
 
   return new URLSearchParams(params).toString();
 }
@@ -329,7 +329,7 @@ function updateSummaryText(set, fullArr, el, labelAll) {
   el.textContent = text;
 }
 
-// --- Dropdown positioning (prevents off-screen overflow) ---
+// --- Dropdown positioning ---
 function positionDropdown(wrapperEl, panelEl) {
   panelEl.style.left = '';
   panelEl.style.right = '';
@@ -384,7 +384,7 @@ async function fetchData() {
   if (els.tzSelect) els.tzSelect.value = state.tz;
 
   const res = await fetch(`/api/opportunities?${qs()}`);
-  const { items, total, page, pages, lastUpdated, sports, competitionIds, agencies } = await res.json();
+  const { items, total, page, pages, lastUpdated, sports, leagues, agencies } = await res.json();
 
   // meta
   els.lastUpdated.textContent = lastUpdated ? fmtWithTZ(lastUpdated) : '—';
@@ -416,11 +416,11 @@ async function fetchData() {
   updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
   updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Render leagues panel (we treat competitionIds as display names now)
-  const lgNow = JSON.stringify(competitionIds || []);
+  // Render leagues panel (now uses meta.leagues = array of league names)
+  const lgNow = JSON.stringify(leagues || []);
   const lgPrev = JSON.stringify(state._leagues || []);
   if (lgNow !== lgPrev) {
-    state._leagues = (competitionIds || []).slice().map(x => String(x)); // names or ids, as sent by server
+    state._leagues = (leagues || []).slice();
     renderCheckboxPanel({
       items: state._leagues,
       wrapEl: els.leaguesChkWrap,
@@ -472,7 +472,7 @@ async function fetchData() {
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
 
-    const leagueCell = it.league || '—'; // show league name if server attached it
+    const leagueCell = it.league || '—';
     let bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
 
     tr.innerHTML = `
@@ -496,7 +496,7 @@ async function fetchData() {
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 8; // +1 because we added the League column
+    tdDetails.colSpan = 8; // increased by 1 because we added the League column
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);
@@ -562,7 +562,6 @@ els.reset?.addEventListener('click', () => {
 });
 
 els.refresh?.addEventListener('click', fetchData);
-
 document.getElementById('requestUpdate')?.addEventListener('click', requestUpdateAndPoll);
 
 // header sorting

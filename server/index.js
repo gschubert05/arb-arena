@@ -33,12 +33,11 @@ const DATA_URL = process.env.DATA_URL ?? ''; // if set, fetch from URL; otherwis
 
 // Active compids + leagues
 const ACTIVE_JSON_PATH = process.env.ACTIVE_JSON_PATH || path.join(__dirname, 'data', 'active_comp_ids.json');
-const ACTIVE_JSON_URL  = process.env.ACTIVE_JSON_URL || ''; // optional: fetch from URL instead of local file
+const ACTIVE_JSON_URL  = process.env.ACTIVE_JSON_URL || ''; // if set, fetch from URL; otherwise read local file
 
 // --- Tiny caches ---
 let cache = { ts: 0, data: { lastUpdated: null, items: [] } };
-let leagueCache = { ts: 0, map: {} }; // { [compid: string]: leagueName }
-const LEAGUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let activeCache = { ts: 0, data: null }; // holds the whole active_comp_ids.json
 
 // --- robust fetch with timeout + retries, fallback to cache/local ---
 async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
@@ -65,6 +64,7 @@ async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
   throw lastErr;
 }
 
+// Load opportunities (URL if provided, else local), with a small cache
 async function loadData() {
   // If using local file, never fetch
   if (!DATA_URL) {
@@ -101,26 +101,37 @@ async function loadData() {
   }
 }
 
-// Load leagues_by_compid (from URL if provided, else local file), with a small cache
-async function loadLeagueMap() {
-  const now = Date.now();
-  if (now - leagueCache.ts < LEAGUE_TTL_MS && leagueCache.map && Object.keys(leagueCache.map).length) {
-    return leagueCache.map;
-  }
-  try {
-    let json;
-    if (ACTIVE_JSON_URL) {
-      json = await fetchWithRetry(ACTIVE_JSON_URL, { attempts: 3, timeoutMs: 6000 });
-    } else {
+// Load active_comp_ids.json (URL if provided, else local), with a small cache
+async function loadActive() {
+  // If using local file, never fetch
+  if (!ACTIVE_JSON_URL) {
+    try {
       const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
-      json = JSON.parse(raw);
+      return JSON.parse(raw);
+    } catch {
+      return {};
     }
-    const map = json?.leagues_by_compid || {};
-    leagueCache = { ts: now, map };
-    return map;
-  } catch {
-    // keep previous if any; else empty map
-    return leagueCache.map || {};
+  }
+
+  const now = Date.now();
+  // serve cached within 60s to avoid hammering
+  if (now - activeCache.ts < 60_000 && activeCache.data) return activeCache.data;
+
+  try {
+    const json = await fetchWithRetry(ACTIVE_JSON_URL, { attempts: 4, timeoutMs: 6000 });
+    activeCache = { ts: now, data: json };
+    return json;
+  } catch (err) {
+    // Fallback: serve last cache or local file; never throw
+    if (activeCache.data) return activeCache.data;
+    try {
+      const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
+      const json = JSON.parse(raw);
+      activeCache = { ts: now, data: json };
+      return json;
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -172,14 +183,15 @@ app.get('/api/opportunities', async (req, res) => {
   } catch {
     data = { lastUpdated: null, items: [] };
   }
-  const leagueMap = await loadLeagueMap();
+  const active = await loadActive();
+  const leagueMap = active?.leagues_by_compid || {};
 
   const {
     sports = '',
     sport = '',
     competitionIds = '',
     competitionId = '',
-    leagues = '',         // NEW: league names (comma-separated)
+    leagues = '',         // optional: allow league names as a param
     dateFrom = '',
     dateTo = '',
     minRoi = '0',
@@ -217,7 +229,7 @@ app.get('/api/opportunities', async (req, res) => {
   const sportSet  = (sports ? toLowerSet(sports) : toLowerSet(sport));
   const compSet   = (competitionIds ? toIdSet(competitionIds) : toIdSet(competitionId));
   const bookSet   = toLowerSet(bookies);
-  const leagueSet = new Set(String(leagues || '').split(',').map(s => s.trim()).filter(Boolean)); // league names are case-sensitive display strings
+  const leagueSet = new Set(String(leagues || '').split(',').map(s => s.trim()).filter(Boolean)); // optional (names)
 
   // ➊ Harden the source list before UI filters/pagination
   const clean = (s) => (s || '').trim().toLowerCase();
@@ -319,8 +331,8 @@ app.get('/api/opportunities', async (req, res) => {
     page: p,
     pages,
     sports: sportsList,
-    competitionIds: competitionIdsList,
-    leagues: leaguesList,     // NEW
+    competitionIds: competitionIdsList, // your UI still uses this param name for the leagues dropdown
+    leagues: leaguesList,               // league names list (if your UI wants it directly)
     agencies,
     items: pageItems
   });
@@ -346,7 +358,7 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ ref: 'main' }) // or another branch if you deploy from a different branch
+      body: JSON.stringify({ ref: 'main' })
     });
 
     if (!resp.ok) {
@@ -357,6 +369,7 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
     lastManualTs = now;
     // Lightly bust the data cache so next fetch re-pulls soon
     cache.ts = 0;
+    activeCache.ts = 0;
     res.json({ ok:true, message:'Scrape requested.' });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e) });
