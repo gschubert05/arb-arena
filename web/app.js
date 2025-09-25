@@ -212,6 +212,58 @@ function renderFullBookTable(it) {
     </div>`;
 }
 
+async function requestUpdateAndPoll() {
+  const status = document.getElementById('updateStatus');
+  const btn = document.getElementById('requestUpdate');
+
+  // remember the current data "signature" to detect change
+  let beforeTotal = Number(document.getElementById('totalCount').textContent) || 0;
+
+  btn.disabled = true;
+  status.textContent = 'Requesting…';
+
+  // hit the trigger endpoint
+  let ok = false, msg = '';
+  try {
+    const res = await fetch('/api/trigger-scrape', { method: 'POST', headers: { 'Content-Type':'application/json' }});
+    const j = await res.json();
+    ok = j.ok; msg = j.message || j.error || '';
+  } catch (e) {
+    msg = String(e);
+  }
+
+  if (!ok) {
+    status.textContent = `Failed: ${msg || 'Unknown error'}`;
+    btn.disabled = false;
+    return;
+  }
+
+  status.textContent = 'Updating… (this can take a couple of minutes)';
+  // poll for new data (up to ~5 min, every 15s)
+  const start = Date.now();
+  const limitMs = 5 * 60 * 1000;
+  const intervalMs = 15000;
+
+  const poll = async () => {
+    await fetchData(); // refresh the table
+    const nowTotal = Number(document.getElementById('totalCount').textContent) || 0;
+    // crude signal: count change or just rely on server lastUpdated if you expose it
+    if (nowTotal !== beforeTotal) {
+      status.textContent = 'Updated ✔';
+      btn.disabled = false;
+      setTimeout(() => (status.textContent=''), 4000);
+      return;
+    }
+    if (Date.now() - start > limitMs) {
+      status.textContent = 'No change detected yet.';
+      btn.disabled = false;
+    } else {
+      setTimeout(poll, intervalMs);
+    }
+  };
+  setTimeout(poll, intervalMs);
+}
+
 // --- Helpers ---
 function parseBets(matchStr) {
   if (!matchStr) return { top: '', bottom: '' };
@@ -486,28 +538,6 @@ function updateAndFetch() { state.page = 1; fetchData(); }
   el.addEventListener('change', () => { state.filters[id] = el.value; updateAndFetch(); });
 });
 
-// 1) register the element near the other els.* lookups
-els.requestUpdate = document.getElementById('requestUpdate');
-
-// 2) add the click handler alongside the existing `els.refresh?.addEventListener(...)`
-els.requestUpdate?.addEventListener('click', async () => {
-  const btn = els.requestUpdate;
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Requesting…';
-  try {
-    const r = await fetch('/api/request-update', { method: 'POST' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    // optional: poll until lastUpdated changes, then refresh the table
-    // simple version: just fetch once after a short delay
-    setTimeout(fetchData, 2500);
-  } catch (e) {
-    console.error(e);
-    alert('Could not request an update. Try again shortly.');
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
-  }
-});
-
 els.minRoi?.addEventListener('input', () => { els.minRoiValue.textContent = Number(els.minRoi.value).toFixed(1); });
 els.minRoi?.addEventListener('change', () => { state.filters.minRoi = els.minRoi.value; updateAndFetch(); });
 
@@ -545,6 +575,8 @@ els.reset?.addEventListener('click', () => {
 });
 
 els.refresh?.addEventListener('click', fetchData);
+
+document.getElementById('requestUpdate')?.addEventListener('click', requestUpdateAndPoll);
 
 // header sorting
 for (const th of document.querySelectorAll('thead [data-sort]')) {

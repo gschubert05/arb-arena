@@ -8,6 +8,14 @@ import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
+const GH_OWNER = process.env.GH_OWNER || "gschubert05";
+const GH_REPO  = process.env.GH_REPO  || "arb-arena";
+const GH_WORKFLOW_FILE = process.env.GH_WORKFLOW_FILE || "scrape-fast.yml"; // must match your file name in .github/workflows
+const GH_TOKEN = process.env.GH_TOKEN || ""; // fine-grained PAT with Actions:write + Contents:read
+
+let lastManualTs = 0; // simple cooldown
+const COOLDOWN_MS = (Number(process.env.REQUEST_COOLDOWN_SEC) || 180) * 1000;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -248,51 +256,39 @@ app.get('/api/opportunities', async (req, res) => {
   res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports: sportsList, competitionIds: competitionIdsList, agencies });
 });
 
-// ENV needed:
-//   GHA_TOKEN   = a fine-grained PAT with workflow:write on your repo
-//   GHA_OWNER   = "your-github-username-or-org"
-//   GHA_REPO    = "your-repo-name"
-//   GHA_WORKFLOW= "scrape.yml"    // or the workflow id
-//   GHA_REF     = "main"          // branch to run on
-app.post('/api/request-update', async (req, res) => {
+app.post('/api/trigger-scrape', express.json(), async (req, res) => {
+  if (!GH_TOKEN) return res.status(500).json({ ok:false, error: "Server missing GH_TOKEN" });
+
+  const now = Date.now();
+  if (now - lastManualTs < COOLDOWN_MS) {
+    const wait = Math.ceil((COOLDOWN_MS - (now - lastManualTs))/1000);
+    return res.status(429).json({ ok:false, error:`Please wait ${wait}s before requesting again.` });
+  }
+
   try {
-    const token = process.env.GHA_TOKEN;
-    if (!token) return res.status(501).json({ ok:false, error:'GHA not configured' });
-
-    const owner = process.env.GHA_OWNER;
-    const repo  = process.env.GHA_REPO;
-    const wf    = process.env.GHA_WORKFLOW;
-    const ref   = process.env.GHA_REF || 'main';
-
-    const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${wf}/dispatches`;
-
-    const r = await fetch(url, {
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_FILE)}/dispatches`;
+    const resp = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${GH_TOKEN}`,
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ ref, inputs: { manual: 'true' } }) // use inputs if your workflow expects any
+      body: JSON.stringify({ ref: 'main' }) // or another branch if you deploy from a different branch
     });
 
-    if (!r.ok) {
-      const t = await r.text();
-      console.error('GHA dispatch failed', r.status, t);
-      return res.status(502).json({ ok:false, error:'dispatch failed' });
+    if (!resp.ok) {
+      const text = await resp.text();
+      return res.status(500).json({ ok:false, error:`GitHub API ${resp.status}: ${text}` });
     }
 
-    // Also bust local cache so we refetch when JSON lands
-    cache.ts = 0;
-    res.status(202).json({ ok:true, message:'Workflow dispatched' });
+    lastManualTs = now;
+    res.json({ ok:true, message:'Scrape requested.' });
   } catch (e) {
-    console.error('request-update error:', e);
-    res.status(500).json({ ok:false });
+    res.status(500).json({ ok:false, error: String(e) });
   }
 });
-
-
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
