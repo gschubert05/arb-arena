@@ -30,7 +30,7 @@ const state = {
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
   _agencies: [],
   _sports: [],
-  _leagues: [], // array of league names (strings)
+  _leagues: [], // array of league display names (strings)
 };
 
 const els = {
@@ -90,14 +90,14 @@ function qs() {
     ...state.filters,
   };
 
-  // Multi filters as CSV (only when strict subset)
   const addCsv = (set, fullArr, key) => {
     if (!fullArr.length) return;
     if (set.size > 0 && set.size < fullArr.length) params[key] = [...set].join(',');
   };
   addCsv(state.selectedBookies, state._agencies, 'bookies');
   addCsv(state.selectedSports, state._sports, 'sports');
-  addCsv(state.selectedLeagues, state._leagues, 'leagues'); // <-- send leagues by name
+  // We send LEAGUE NAMES (matches server's ?leagues=)
+  addCsv(state.selectedLeagues, state._leagues, 'leagues');
 
   return new URLSearchParams(params).toString();
 }
@@ -394,7 +394,7 @@ async function fetchData() {
   els.prev.disabled = page <= 1;
   els.next.disabled = page >= pages;
 
-  // Render sports panel
+  // Sports panel
   const spNow = JSON.stringify(sports || []);
   const spPrev = JSON.stringify(state._sports || []);
   if (spNow !== spPrev) {
@@ -416,7 +416,7 @@ async function fetchData() {
   updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
   updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Render leagues panel (now uses meta.leagues = array of league names)
+  // Leagues panel (uses meta.leagues - display names)
   const lgNow = JSON.stringify(leagues || []);
   const lgPrev = JSON.stringify(state._leagues || []);
   if (lgNow !== lgPrev) {
@@ -438,7 +438,7 @@ async function fetchData() {
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSelectedCount, 'All');
 
-  // Render bookies panel
+  // Bookies panel
   const agNow = JSON.stringify(agencies || []);
   const agPrev = JSON.stringify(state._agencies || []);
   if (agNow !== agPrev) {
@@ -496,7 +496,7 @@ async function fetchData() {
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 8; // increased by 1 because we added the League column
+    tdDetails.colSpan = 8; // League column added
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);
@@ -541,7 +541,6 @@ els.reset?.addEventListener('click', () => {
   state.selectedSports.clear();  localStorage.removeItem('sportsSelected');
   state.selectedLeagues.clear(); localStorage.removeItem('leaguesSelected');
 
-  // Rerender panels to reflect "All"
   renderCheckboxPanel({
     items: state._sports, wrapEl: els.sportsChkWrap, selectAllEl: els.sportsSelectAll,
     selectedSet: state.selectedSports, allKey: 'sport', onChange: ()=>{}
