@@ -55,7 +55,7 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # Also checkout the data branch into ./data-branch
+      # Also checkout the `data` branch into ./data-branch
       - name: Checkout data branch
         uses: actions/checkout@v4
         with:
@@ -63,34 +63,37 @@ jobs:
           path: data-branch
           fetch-depth: 1
 
-      # Parse active_comp_ids.json and export COMP_IDS + ACTIVE_JSON_URL
+      # Parse active_comp_ids.json and expose values as step outputs (no $GITHUB_ENV)
       - name: Load active competition IDs (from data branch folder)
+        id: load_ids
         shell: bash
         run: |
           set -euo pipefail
           JSON_PATH="data-branch/server/data/active_comp_ids.json"
 
+          COMP_CSV=""
           if [[ -f "$JSON_PATH" ]]; then
-            COMP_CSV=$(python -c "import json; d=json.load(open('$JSON_PATH','r',encoding='utf-8')); ids=d.get('active_comp_ids', d if isinstance(d,list) else []); print(','.join(str(x) for x in ids))")
-            if [[ -n \"$COMP_CSV\" ]]; then
-              echo "COMP_IDS=$COMP_CSV" >> \"$GITHUB_ENV\"
-              echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> \"$GITHUB_ENV\"
-              echo "Using COMP_IDS=$COMP_CSV"
-            else
-              echo "Parsed empty active_comp_ids.json; falling back"
-              echo "COMP_IDS=10,11" >> \"$GITHUB_ENV\"
-            fi
-          else
-            echo "File not found: $JSON_PATH ; falling back"
-            echo "COMP_IDS=10,11" >> \"$GITHUB_ENV\"
+            COMP_CSV=$(python -c "import json; d=json.load(open('$JSON_PATH','r',encoding='utf-8')); ids=d.get('active_comp_ids', d if isinstance(d,list) else []); print(','.join(str(int(x)) for x in ids))")
           fi
+
+          if [[ -z "$COMP_CSV" ]]; then
+            echo "active_comp_ids.json missing/empty; falling back to 10,11"
+            COMP_CSV="10,11"
+          fi
+
+          echo "comp_ids=$COMP_CSV" >> "$GITHUB_OUTPUT"
+          echo "active_json_url=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> "$GITHUB_OUTPUT"
+
+          echo "Using COMP_IDS=$COMP_CSV"
+
 
       - name: Test DNS / curl
         run: curl -v http://odds.aussportsbetting.com/multibet
 
       - name: Run scraper under Xvfb
         env:
-          COMP_IDS: ${{ env.COMP_IDS }}
+          COMP_IDS: ${{ steps.load_ids.outputs.comp_ids }}
+          ACTIVE_JSON_URL: ${{ steps.load_ids.outputs.active_json_url }}
           FORCE_HEADLESS: "true"
         run: |
           nohup Xvfb :99 -screen 0 1280x1024x24 >/tmp/xvfb.log 2>&1 &
