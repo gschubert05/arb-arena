@@ -55,14 +55,15 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # Also checkout the `data` branch into a subfolder
+      # Also checkout the data branch into ./data-branch
       - name: Checkout data branch
         uses: actions/checkout@v4
         with:
           ref: data
           path: data-branch
+          fetch-depth: 1
 
-      # Parse active_comp_ids.json from that folder and export COMP_IDS + ACTIVE_JSON_URL
+      # Parse active_comp_ids.json and export COMP_IDS + ACTIVE_JSON_URL
       - name: Load active competition IDs (from data branch folder)
         shell: bash
         run: |
@@ -70,31 +71,18 @@ jobs:
           JSON_PATH="data-branch/server/data/active_comp_ids.json"
 
           if [[ -f "$JSON_PATH" ]]; then
-            COMP_CSV=$(python - <<'PY'
-              import json, sys
-              p = "data-branch/server/data/active_comp_ids.json"
-              with open(p, "r", encoding="utf-8") as f:
-                  d = json.load(f)
-              if isinstance(d, dict) and "active_comp_ids" in d:
-                  ids = d["active_comp_ids"]
-              elif isinstance(d, list):
-                  ids = d
-              else:
-                  ids = []
-              print(",".join(str(x) for x in ids))
-            PY
-            )
-            if [[ -n "$COMP_CSV" ]]; then
-              echo "COMP_IDS=$COMP_CSV" >> "$GITHUB_ENV"
-              echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> "$GITHUB_ENV"
+            COMP_CSV=$(python -c "import json; d=json.load(open('$JSON_PATH','r',encoding='utf-8')); ids=d.get('active_comp_ids', d if isinstance(d,list) else []); print(','.join(str(x) for x in ids))")
+            if [[ -n \"$COMP_CSV\" ]]; then
+              echo "COMP_IDS=$COMP_CSV" >> \"$GITHUB_ENV\"
+              echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> \"$GITHUB_ENV\"
               echo "Using COMP_IDS=$COMP_CSV"
             else
               echo "Parsed empty active_comp_ids.json; falling back"
-              echo "COMP_IDS=10,11" >> "$GITHUB_ENV"
+              echo "COMP_IDS=10,11" >> \"$GITHUB_ENV\"
             fi
           else
             echo "File not found: $JSON_PATH ; falling back"
-            echo "COMP_IDS=10,11" >> "$GITHUB_ENV"
+            echo "COMP_IDS=10,11" >> \"$GITHUB_ENV\"
           fi
 
       - name: Test DNS / curl
