@@ -172,7 +172,33 @@ app.get('/api/opportunities', async (req, res) => {
   const compSet  = (competitionIds ? toIdSet(competitionIds) : toIdSet(competitionId));
   const bookSet  = toLowerSet(bookies);
 
-  let filtered = items.filter(it => {
+  // ➊ Harden the source list before UI filters/pagination
+  const clean = (s) => (s || '').trim().toLowerCase();
+
+  let base = (items || []).filter((it) => {
+    // Exclude any row where “Bookmaker” appears (best or any row)
+    const rows = it.book_table?.rows || [];
+    const bestL = clean(it.book_table?.best?.left?.agency || '');
+    const bestR = clean(it.book_table?.best?.right?.agency || '');
+    const anyBookmaker =
+      bestL === 'bookmaker' ||
+      bestR === 'bookmaker' ||
+      rows.some(r => clean(r?.agency) === 'bookmaker');
+    if (anyBookmaker) return false;
+
+    // If best odds exist, recompute market%/ROI from freshest prices
+    const L = it.book_table?.best?.left?.odds;
+    const R = it.book_table?.best?.right?.odds;
+    if (Number.isFinite(L) && Number.isFinite(R) && L > 0 && R > 0) {
+      const mktPct = (1 / L + 1 / R) * 100;
+      if (!Number.isFinite(mktPct) || mktPct >= 100) return false; // arb evaporated
+      it.market_percentage = Math.round(mktPct * 100) / 100;
+      it.roi = Math.round(((1 / (mktPct / 100)) - 1) * 1e6) / 1e6;
+    }
+    return true;
+  });
+
+  let filtered = base.filter(it => {
     const roiOk = (Number(it.roi) || 0) >= mRoi / 100;
     const s = (it.sport || '').toLowerCase();
     const sportOk = sportSet.size === 0 || sportSet.has(s);
@@ -208,10 +234,10 @@ app.get('/api/opportunities', async (req, res) => {
   const start = (p - 1) * ps;
   const pageItems = filtered.slice(start, start + ps);
 
-  const sportsList = [...new Set(items.map(i => i.sport).filter(Boolean))].sort((a,b)=>(a||'').localeCompare(b||''));
-  const competitionIdsList = [...new Set(items.map(i => i.competitionid || i.competitionId).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const sportsList = [...new Set(base.map(i => i.sport).filter(Boolean))].sort((a,b)=>(a||'').localeCompare(b||''));
+  const competitionIdsList = [...new Set(base.map(i => i.competitionid || i.competitionId).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
   const agenciesSet = new Set();
-  for (const it of items) {
+  for (const it of base) {
     const l = cleanAgency(it.book_table?.best?.left?.agency || '');
     const r = cleanAgency(it.book_table?.best?.right?.agency || '');
     if (l) agenciesSet.add(l);

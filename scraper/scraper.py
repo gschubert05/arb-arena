@@ -421,18 +421,30 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
                     table_cache[key] = _scrape_betting_table_for_search(driver, url, phrase)
                 table = table_cache[key]
 
+            # --- inside run_once(), in the "verified" build loop after we've set `table` ---
             if table:
                 it["book_table"] = table
+
+                # ➊ Exclude if ANY agency in the table is exactly "Bookmaker"
+                has_bookmaker = any(
+                    (r.get("agency") or "").strip().lower() == "bookmaker"
+                    for r in (table.get("rows") or [])
+                )
+                if has_bookmaker:
+                    continue  # drop this row entirely
+
                 best = table.get("best") or {}
                 L = (best.get("left")  or {}).get("odds")
                 R = (best.get("right") or {}).get("odds")
+
+                # ➋ If we have current best prices, recompute market% and ROI and keep only if still an arb
                 if isinstance(L, (int, float)) and isinstance(R, (int, float)) and L > 0 and R > 0:
                     new_market_pct = ((1.0 / L) + (1.0 / R)) * 100.0
                     if new_market_pct >= 100.0:
-                        # no longer an arb after agency best adjustment -> drop
-                        continue
+                        continue  # no longer an arbitrage after the best-odds refresh
                     it["market_percentage"] = round(new_market_pct, 2)
-                    it["roi"]  = round((1.0 / (new_market_pct / 100.0)) - 1.0, 6)
+                    it["roi"] = round((1.0 / (new_market_pct / 100.0)) - 1.0, 6)
+
 
             verified.append(it)
 
