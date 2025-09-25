@@ -71,19 +71,19 @@ jobs:
 
             if [[ -f "$JSON_PATH" ]]; then
               COMP_CSV=$(python - <<'PY'
-import json, sys
-p = "data-branch/server/data/active_comp_ids.json"
-with open(p, "r", encoding="utf-8") as f:
-    d = json.load(f)
-if isinstance(d, dict) and "active_comp_ids" in d:
-    ids = d["active_comp_ids"]
-elif isinstance(d, list):
-    ids = d
-else:
-    ids = []
-print(",".join(str(x) for x in ids))
-PY
-)
+            import json, sys
+            p = "data-branch/server/data/active_comp_ids.json"
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and "active_comp_ids" in d:
+                ids = d["active_comp_ids"]
+            elif isinstance(d, list):
+                ids = d
+            else:
+                ids = []
+            print(",".join(str(x) for x in ids))
+            PY
+            )
               if [[ -n "$COMP_CSV" ]]; then
                 echo "COMP_IDS=$COMP_CSV" >> "$GITHUB_ENV"
                 echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> "$GITHUB_ENV"
