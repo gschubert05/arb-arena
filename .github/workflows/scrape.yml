@@ -53,43 +53,39 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # Checkout your main code as usual
       - uses: actions/checkout@v4
 
-      - name: Load active competition IDs (from data branch via git)
+      # Also checkout the "data" branch into ./data-branch
+      - name: Checkout data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data-branch
+
+      # Load active_comp_ids.json and export COMP_IDS + ACTIVE_JSON_URL
+      - name: Load active competition IDs (from data branch folder)
         run: |
           set -euo pipefail
-          # fetch the data branch ref explicitly
-          git fetch --no-tags --depth=1 origin refs/heads/data:refs/remotes/origin/data || true
-
-          # Try to read the JSON from the remote ref
-          CONTENT="$(git show origin/data:server/data/active_comp_ids.json 2>/dev/null || true)"
-
-          if [[ -n "$CONTENT" ]]; then
+          JSON_PATH="data-branch/server/data/active_comp_ids.json"
+          if [[ -f "$JSON_PATH" ]]; then
             COMP_CSV=$(python - <<'PY'
-          import sys,json
-          try:
-              d=json.load(sys.stdin)
-              ids=d.get('active_comp_ids', []) if isinstance(d,dict) else (d if isinstance(d,list) else [])
-              print(",".join(str(x) for x in ids))
-          except Exception:
-              print("")
-          PY
-          <<< "$CONTENT")
-          if [[ -n "$COMP_CSV" ]]; then
-            echo "COMP_IDS=$COMP_CSV" >> $GITHUB_ENV
-            echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> $GITHUB_ENV
-            echo "Using COMP_IDS=$COMP_CSV"
+            import json,sys
+            with open("data-branch/server/data/active_comp_ids.json","r",encoding="utf-8") as f:
+                d=json.load(f)
+            ids=d["active_comp_ids"] if isinstance(d,dict) and "active_comp_ids" in d else (d if isinstance(d,list) else [])
+            print(",".join(str(x) for x in ids))
+            PY
+            )
+            echo "COMP_IDS=${COMP_CSV}" >> "$GITHUB_ENV"
+            # also publish a URL env var the scraper can use if needed
+            echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> "$GITHUB_ENV"
+            echo "Using COMP_IDS=${COMP_CSV}"
           else
-            echo "JSON parse produced empty COMP_CSV; falling back"
-            echo "COMP_IDS=10,11" >> $GITHUB_ENV
-            echo "Using COMP_IDS=10,11"
+            echo "active_comp_ids.json not found at $JSON_PATH"
+            echo "COMP_IDS=10,11" >> "$GITHUB_ENV"
+            echo "Using COMP_IDS=10,11 (fallback)"
           fi
-          else
-            echo "git show returned no content; falling back"
-            echo "COMP_IDS=10,11" >> $GITHUB_ENV
-            echo "Using COMP_IDS=10,11"
-          fi
-
 
       - name: Test DNS / curl
         run: curl -v http://odds.aussportsbetting.com/multibet
