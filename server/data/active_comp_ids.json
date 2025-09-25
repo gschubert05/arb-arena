@@ -1,6 +1,6 @@
 {
-  "discoveredAt": "2025-09-25T07:52:52Z",
-  "range": "1-30",
+  "discoveredAt": "2025-09-25T08:09:37Z",
+  "range": "1-10",
   "skip": [
     72,
     73,
@@ -15,15 +15,7 @@
     7,
     8,
     9,
-    10,
-    11,
-    14,
-    15,
-    16,
-    19,
-    20,
-    21,
-    29
+    10
   ],
   "leagues_by_compid": {
     "1": "Eng Premier League",
@@ -35,27 +27,7 @@
     "7": "Italian Serie B",
     "8": "Scot Premier League",
     "9": "Super Rugby",
-    "10": "NRL 2025",
-    "11": "AFL 2025",
-    "12": "English FA Cup",
-    "13": "MLB Weekend 2019",
-    "14": "Major League Soccer",
-    "15": "NFL 2025/26",
-    "16": "Dutch Eredivisie",
-    "17": "Spanish La Liga",
-    "18": "German Bundesliga",
-    "19": "NBL",
-    "20": "Champions League",
-    "21": "European Super League",
-    "22": "NBA Weekend 2019/20",
-    "23": "Sports Betting Markets",
-    "24": "One Day Cricket",
-    "25": "NHL Weekend 2019/20",
-    "26": "Sports Betting Markets",
-    "27": "Euro 2028",
-    "28": "Australian Horse Racing Betting Odds",
-    "29": "French League 2024/25",
-    "30": "Rugby Union World Cup 2027"
+    "10": "NRL 2025"
   },
   "debug_counts": {
     "1": {
@@ -107,106 +79,6 @@
       "td_more_market_odds": 0,
       "a_addSelection": 0,
       "market_header_tables": 3
-    },
-    "11": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 3
-    },
-    "12": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "13": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "14": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 4
-    },
-    "15": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 3
-    },
-    "16": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 4
-    },
-    "17": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "18": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "19": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 3
-    },
-    "20": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 4
-    },
-    "21": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 2
-    },
-    "22": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "23": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "24": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "25": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "26": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "27": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "28": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
-    },
-    "29": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 4
-    },
-    "30": {
-      "td_more_market_odds": 0,
-      "a_addSelection": 0,
-      "market_header_tables": 0
     }
   }
 }
