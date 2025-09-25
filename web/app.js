@@ -30,7 +30,7 @@ const state = {
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
   _agencies: [],
   _sports: [],
-  _leagues: [], // array of league display names (strings)
+  _leagues: [], // array of league names (strings)
 };
 
 const els = {
@@ -96,8 +96,7 @@ function qs() {
   };
   addCsv(state.selectedBookies, state._agencies, 'bookies');
   addCsv(state.selectedSports, state._sports, 'sports');
-  // We send LEAGUE NAMES (matches server's ?leagues=)
-  addCsv(state.selectedLeagues, state._leagues, 'leagues');
+  addCsv(state.selectedLeagues, state._leagues, 'leagues'); // send leagues by name
 
   return new URLSearchParams(params).toString();
 }
@@ -316,7 +315,7 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
       selectedSet.clear();
-      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      wrapEl.querySelectorAll('input[type="checkbox)').forEach(cb => cb.checked = false);
     }
     onChange();
   };
@@ -394,7 +393,7 @@ async function fetchData() {
   els.prev.disabled = page <= 1;
   els.next.disabled = page >= pages;
 
-  // Sports panel
+  // Sports
   const spNow = JSON.stringify(sports || []);
   const spPrev = JSON.stringify(state._sports || []);
   if (spNow !== spPrev) {
@@ -416,7 +415,7 @@ async function fetchData() {
   updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
   updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Leagues panel (uses meta.leagues - display names)
+  // Leagues (display names)
   const lgNow = JSON.stringify(leagues || []);
   const lgPrev = JSON.stringify(state._leagues || []);
   if (lgNow !== lgPrev) {
@@ -438,7 +437,7 @@ async function fetchData() {
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSelectedCount, 'All');
 
-  // Bookies panel
+  // Bookies
   const agNow = JSON.stringify(agencies || []);
   const agPrev = JSON.stringify(state._agencies || []);
   if (agNow !== agPrev) {
@@ -496,7 +495,7 @@ async function fetchData() {
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 8; // League column added
+    tdDetails.colSpan = 8; // League col added
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);

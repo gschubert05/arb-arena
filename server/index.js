@@ -33,7 +33,21 @@ const DATA_URL = process.env.DATA_URL ?? ''; // if set, fetch from URL; otherwis
 
 // Active compids + leagues
 const ACTIVE_JSON_PATH = process.env.ACTIVE_JSON_PATH || path.join(__dirname, 'data', 'active_comp_ids.json');
-const ACTIVE_JSON_URL  = process.env.ACTIVE_JSON_URL  || ''; // if set, fetch from URL; otherwise read local file
+// If not provided, we will try to derive from DATA_URL by swapping the filename:
+const ACTIVE_JSON_URL  = process.env.ACTIVE_JSON_URL || '';
+
+function deriveActiveUrlFromDataUrl(dataUrl) {
+  if (!dataUrl) return '';
+  try {
+    const u = new URL(dataUrl);
+    const parts = u.pathname.split('/');
+    parts[parts.length - 1] = 'active_comp_ids.json';
+    u.pathname = parts.join('/');
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
 
 // --- Caches ---
 let dataCache   = { ts: 0, data: { lastUpdated: null, items: [] } };
@@ -65,30 +79,55 @@ async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
 }
 
 // --- helpers ---
+function toStrId(x) { return String(x ?? '').trim(); }
+
+// Very tolerant mapper: accepts several shapes and tries to build { compid -> leagueName }
 function resolveLeagueMap(json) {
-  // Accept multiple shapes gracefully:
-  // 1) { leagues_by_compid: { "15": "NFL ...", ... } }
-  if (json && typeof json === 'object' && json.leagues_by_compid && typeof json.leagues_by_compid === 'object') {
+  if (!json || typeof json !== 'object') return {};
+
+  // 1) { leagues_by_compid: { "15": "NFL", ... } }
+  if (json.leagues_by_compid && typeof json.leagues_by_compid === 'object') {
     return json.leagues_by_compid;
   }
-  // 2) top-level map of id->name
-  if (json && typeof json === 'object' && !Array.isArray(json)) {
-    const allValuesAreStrings = Object.values(json).every(v => typeof v === 'string');
-    if (allValuesAreStrings) return json;
+
+  // 2) top-level object of id->name
+  if (!Array.isArray(json)) {
+    const vals = Object.values(json);
+    if (vals.length && vals.every(v => typeof v === 'string')) return json;
   }
-  // 3) { items:[{competitionid, league}], competitions:[...]} (fallbacks)
-  const map = {};
-  const arrs = [];
-  if (Array.isArray(json?.items)) arrs.push(json.items);
-  if (Array.isArray(json?.competitions)) arrs.push(json.competitions);
-  for (const arr of arrs) {
-    for (const x of arr) {
-      const id = String(x.competitionid ?? x.competitionId ?? x.id ?? '');
-      const name = x.league ?? x.name ?? '';
-      if (id && name) map[id] = name;
+
+  const out = {};
+
+  // 3) arrays of objects: items/competitions/active/rows etc.
+  const candidates = [
+    json.items, json.competitions, json.active, json.rows, json.data, json.list, json.leagues
+  ].filter(Array.isArray);
+
+  // also allow the json *itself* to be an array
+  if (Array.isArray(json)) candidates.push(json);
+
+  for (const arr of candidates) {
+    for (const r of arr) {
+      if (!r || typeof r !== 'object') continue;
+      const id = toStrId(r.competitionid ?? r.competitionId ?? r.id ?? r.compid ?? r.cid);
+      const name = r.league ?? r.name ?? r.league_name ?? r.title ?? '';
+      if (id && name) out[id] = name;
     }
   }
-  return map;
+
+  // 4) arrays like [["15","NFL"],["16","NBA"]] or [[15,"NFL"],...]
+  const pairish = candidates.find(a =>
+    Array.isArray(a) && a.length && Array.isArray(a[0]) && a[0].length >= 2
+  );
+  if (pairish) {
+    for (const row of pairish) {
+      const id = toStrId(row[0]);
+      const name = row[1];
+      if (id && typeof name === 'string' && name) out[id] = name;
+    }
+  }
+
+  return out;
 }
 
 function cleanAgency(name) {
@@ -159,53 +198,63 @@ async function loadData() {
 }
 
 async function loadActive() {
-  if (!ACTIVE_JSON_URL) {
-    try {
-      const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
+  // priority: ACTIVE_JSON_URL -> derived from DATA_URL -> local file
+  const derivedUrl = deriveActiveUrlFromDataUrl(DATA_URL);
+  const tryUrls = [ACTIVE_JSON_URL, derivedUrl].filter(Boolean);
+
   const now = Date.now();
   if (now - activeCache.ts < 60_000 && activeCache.data) return activeCache.data;
-  try {
-    const json = await fetchWithRetry(ACTIVE_JSON_URL, { attempts: 4, timeoutMs: 6000 });
-    activeCache = { ts: now, data: json };
-    return json;
-  } catch {
-    if (activeCache.data) return activeCache.data;
+
+  // Try URLs first
+  for (const url of tryUrls) {
     try {
-      const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
-      const json = JSON.parse(raw);
+      const json = await fetchWithRetry(url, { attempts: 4, timeoutMs: 6000 });
       activeCache = { ts: now, data: json };
       return json;
     } catch {
-      return {};
+      // continue
     }
+  }
+
+  // Fallback: local file
+  try {
+    const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
+    const json = JSON.parse(raw);
+    activeCache = { ts: now, data: json };
+    return json;
+  } catch {
+    return {};
   }
 }
 
 // --- static web ---
 app.use(express.static(WEB_DIR, { etag: true, lastModified: true, cacheControl: false }));
 
-// --- debug route (so you can see if leagues are loading) ---
-app.get('/api/_debug/leagues', async (req, res) => {
-  const src = ACTIVE_JSON_URL ? { source: 'url', url: ACTIVE_JSON_URL } : { source: 'file', path: ACTIVE_JSON_PATH };
+// --- debug route (where you tested; keep both spellings to be safe) ---
+async function debugLeagues(req, res) {
+  const derivedUrl = deriveActiveUrlFromDataUrl(DATA_URL);
+  const src = ACTIVE_JSON_URL
+    ? { source: 'url', url: ACTIVE_JSON_URL }
+    : (derivedUrl ? { source: 'derived', url: derivedUrl } : { source: 'file', path: ACTIVE_JSON_PATH });
+
   const active = await loadActive();
   const map = resolveLeagueMap(active);
+
   res.json({
     ...src,
     keys: Object.keys(map).length,
     sample: Object.entries(map).slice(0, 10),
+    topLevelKeys: active && typeof active === 'object' ? Object.keys(active).slice(0, 10) : [],
   });
-});
+}
+app.get('/api/_debug/leagues', debugLeagues);
+app.get('/api/_debug_leagues', debugLeagues); // your earlier path
 
 // --- API: opportunities ---
 app.get('/api/opportunities', async (req, res) => {
-  // Load data + leagues
   let data;
   try { data = await loadData(); } catch { data = { lastUpdated: null, items: [] }; }
+
   const active = await loadActive();
   const leagueMap = resolveLeagueMap(active);
 
@@ -214,7 +263,7 @@ app.get('/api/opportunities', async (req, res) => {
     sport = '',
     competitionIds = '',
     competitionId = '',
-    leagues = '',         // optional: names (what your app.js sends now)
+    leagues = '',         // names (UI sends this now)
     dateFrom = '',
     dateTo = '',
     minRoi = '0',
@@ -223,13 +272,11 @@ app.get('/api/opportunities', async (req, res) => {
     page = '1',
     pageSize = '50',
     bookies = '',
-    debug = '0'
   } = req.query;
 
   const { lastUpdated } = data;
   const items = Array.isArray(data.items) ? data.items : [];
 
-  // normalize dates on items
   for (const it of items) {
     if (!it.dateISO && it.date) {
       const iso = coerceISO(it.date);
@@ -249,23 +296,18 @@ app.get('/api/opportunities', async (req, res) => {
     new Set(String(csv || '').split(',').map(s => s.trim()).filter(Boolean).map(s => s.toLowerCase()));
   const toIdSet = (csv) => new Set(String(csv || '').split(',').map(s => s.trim()).filter(Boolean));
 
-  // incoming filters
   const sportSet  = (sports ? toLowerSet(sports) : toLowerSet(sport));
   const compSet   = (competitionIds ? toIdSet(competitionIds) : toIdSet(competitionId));
   const bookSet   = toLowerSet(bookies);
-  const leagueSet = new Set(String(leagues || '').split(',').map(s => s.trim()).filter(Boolean)); // display names
+  const leagueSet = new Set(String(leagues || '').split(',').map(s => s.trim()).filter(Boolean));
 
   const clean = (s) => (s || '').trim().toLowerCase();
 
-  // initial hardening + ROI recalc + Bookmaker exclusion
   let base = (items || []).filter((it) => {
     const rows = it.book_table?.rows || [];
     const bestL = clean(it.book_table?.best?.left?.agency || '');
     const bestR = clean(it.book_table?.best?.right?.agency || '');
-    const anyBookmaker =
-      bestL === 'bookmaker' ||
-      bestR === 'bookmaker' ||
-      rows.some(r => clean(r?.agency) === 'bookmaker');
+    const anyBookmaker = bestL === 'bookmaker' || bestR === 'bookmaker' || rows.some(r => clean(r?.agency) === 'bookmaker');
     if (anyBookmaker) return false;
 
     const L = it.book_table?.best?.left?.odds;
@@ -279,18 +321,17 @@ app.get('/api/opportunities', async (req, res) => {
     return true;
   });
 
-  // attach league names
+  // attach league
   for (const it of base) {
-    const compId = String(it.competitionid || it.competitionId || '');
+    const compId = toStrId(it.competitionid ?? it.competitionId ?? '');
     it.league = leagueMap[compId] || null;
   }
 
-  // apply filters
   let filtered = base.filter(it => {
     const roiOk = (Number(it.roi) || 0) >= mRoi / 100;
     const s = (it.sport || '').toLowerCase();
     const sportOk = sportSet.size === 0 || sportSet.has(s);
-    const cid = String(it.competitionid || it.competitionId || '');
+    const cid = toStrId(it.competitionid ?? it.competitionId ?? '');
     const compOk = compSet.size === 0 || compSet.has(cid);
     const dfOk = !dateFrom || (it.dateISO && it.dateISO >= dateFrom);
     const dtOk = !dateTo || (it.dateISO && it.dateISO <= dateTo);
@@ -306,7 +347,6 @@ app.get('/api/opportunities', async (req, res) => {
     return roiOk && sportOk && compOk && dfOk && dtOk && bookOk && leagueOk;
   });
 
-  // sort
   const dir = sortDir === 'asc' ? 1 : -1;
   const key = (a) => {
     switch (sortBy) {
@@ -320,13 +360,11 @@ app.get('/api/opportunities', async (req, res) => {
   };
   filtered.sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * dir);
 
-  // paginate
   const total = filtered.length;
   const pages = Math.max(1, Math.ceil(total / ps));
   const start = (p - 1) * ps;
   const pageItems = filtered.slice(start, start + ps);
 
-  // meta
   const sportsList = [...new Set(base.map(i => i.sport).filter(Boolean))].sort((a,b)=>(a||'').localeCompare(b||''));
   const competitionIdsList = [...new Set(base.map(i => i.competitionid || i.competitionId).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
   const leaguesList = [...new Set(base.map(i => i.league).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -340,28 +378,18 @@ app.get('/api/opportunities', async (req, res) => {
   }
   const agencies = [...agenciesSet].sort((a,b)=>a.localeCompare(b));
 
-  const payload = {
+  res.json({
     ok: true,
     lastUpdated,
     total,
     page: p,
     pages,
     sports: sportsList,
-    competitionIds: competitionIdsList, // IDs (kept for backwards-compat)
-    leagues: leaguesList,               // NAMES (front-end uses this)
+    competitionIds: competitionIdsList, // still available if you want to use IDs
+    leagues: leaguesList,               // names (what app.js uses)
     agencies,
     items: pageItems
-  };
-
-  if (debug === '1') {
-    payload._debug = {
-      activeSource: ACTIVE_JSON_URL ? 'url' : 'file',
-      activePathOrUrl: ACTIVE_JSON_URL || ACTIVE_JSON_PATH,
-      leagueKeys: Object.keys(leagueMap).length
-    };
-  }
-
-  res.json(payload);
+  });
 });
 
 // --- API: trigger GitHub Actions scrape ---
@@ -393,7 +421,6 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
     }
 
     lastManualTs = now;
-    // bust caches so next pull is fresh
     dataCache.ts = 0;
     activeCache.ts = 0;
     res.json({ ok:true, message:'Scrape requested.' });
@@ -408,7 +435,8 @@ app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
 // --- start ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  const activeSrc = ACTIVE_JSON_URL ? `URL: ${ACTIVE_JSON_URL}` : `file: ${ACTIVE_JSON_PATH}`;
+  const derivedUrl = deriveActiveUrlFromDataUrl(DATA_URL);
+  const activeSrc = ACTIVE_JSON_URL ? `URL: ${ACTIVE_JSON_URL}` : (derivedUrl ? `derived URL: ${derivedUrl}` : `file: ${ACTIVE_JSON_PATH}`);
   const dataSrc   = DATA_URL ? `URL: ${DATA_URL}` : `file: ${DATA_FILE}`;
   console.log(`Web server running on http://localhost:${PORT}`);
   console.log(`[opportunities] ${dataSrc}`);
