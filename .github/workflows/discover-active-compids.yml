@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # we will base the 'data' branch on origin/data
+          fetch-depth: 0  # we'll base the worktree on origin/data if it exists
 
       - uses: actions/setup-python@v5
         with:
@@ -42,23 +42,35 @@ jobs:
         run: |
           mkdir -p server/data
           python scraper/discover_active_compids.py \
-            --range "1-30" --skip "72,73,108,114" \
+            --range "1-10" --skip "72,73,108,114" \
             --out server/data/active_comp_ids.json -v
 
-      # ✅ Publish only the active_comp_ids.json, preserving the rest of the data branch
+      # ✅ Publish ONLY active_comp_ids.json via a separate worktree (no branch switching in-place)
       - name: Publish active_comp_ids.json to data branch
         run: |
+          set -e
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
           git fetch origin data || true
+
+          # Create/update a detached worktree rooted on origin/data (or new branch if missing)
+          WT_DIR="$(mktemp -d)"
           if git rev-parse --verify origin/data >/dev/null 2>&1; then
-            git checkout -B data origin/data
+            git worktree add -B data "$WT_DIR" origin/data
           else
-            git checkout -B data
+            # First-time creation of data branch from current HEAD
+            git worktree add -B data "$WT_DIR"
           fi
 
-          mkdir -p server/data
+          mkdir -p "$WT_DIR/server/data"
+          cp -f server/data/active_comp_ids.json "$WT_DIR/server/data/active_comp_ids.json"
+
+          cd "$WT_DIR"
           git add -f server/data/active_comp_ids.json
           git commit -m "discover: active comp IDs $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data
+
+          # Clean up the worktree
+          cd -
+          git worktree remove "$WT_DIR" --force

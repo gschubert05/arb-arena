@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # You can override via repo/env vars or environment
   ROI_THRESHOLD_PCT: "2.0"
   NOTIFY_BOOKIES: "sportsbet,bet365,neds,tab"
   PUBLISH_JSON_PATH: "server/data/opportunities.json"
@@ -27,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # we will read from origin/data
+          fetch-depth: 0  # we'll read origin/data without switching branches
 
       - uses: actions/setup-python@v5
         with:
@@ -54,7 +53,7 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # ✅ Read active_comp_ids.json directly from origin/data (don't write a local file)
+      # ✅ Read active_comp_ids.json from origin/data and export COMP_IDS (no local file written)
       - name: Load active competition IDs (from data branch)
         run: |
           git fetch origin data || true
@@ -87,7 +86,7 @@ jobs:
           export DISPLAY=:99
           python scraper/scraper.py
 
-      # ✅ Load previous state from origin/data (no PAT needed)
+      # ✅ Load previous state from origin/data without switching branches
       - name: Load previous state (for notifications)
         run: |
           git fetch origin data || true
@@ -122,23 +121,33 @@ jobs:
           test -f seen_keys.json || echo "[]" > seen_keys.json
           mv -f seen_keys.json server/data/seen_keys.json
 
-      # ✅ Publish ONLY opportunities + seen_keys, based on origin/data (no force; don't touch active_comp_ids.json)
+      # ✅ Publish ONLY opportunities + seen_keys via a separate worktree (no conflicts, no force)
       - name: Publish JSON + seen_keys to data branch
         run: |
+          set -e
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
           git fetch origin data || true
+
+          # Use a temporary worktree for the data branch
+          WT_DIR="$(mktemp -d)"
           if git rev-parse --verify origin/data >/dev/null 2>&1; then
-            git checkout -B data origin/data
+            git worktree add -B data "$WT_DIR" origin/data
           else
-            git checkout -B data
+            git worktree add -B data "$WT_DIR"
           fi
 
-          mkdir -p server/data
-          git add -f "$PUBLISH_JSON_PATH"
-          git add -f "$SEEN_KEYS_PATH"
-          # DO NOT add active_comp_ids.json here; discover workflow owns it
+          mkdir -p "$WT_DIR/server/data"
+          cp -f server/data/opportunities.json "$WT_DIR/server/data/opportunities.json"
+          cp -f server/data/seen_keys.json "$WT_DIR/server/data/seen_keys.json"
 
+          cd "$WT_DIR"
+          git add -f server/data/opportunities.json
+          git add -f server/data/seen_keys.json
           git commit -m "fast: data $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data
+
+          # Clean up the worktree
+          cd -
+          git worktree remove "$WT_DIR" --force
