@@ -248,6 +248,52 @@ app.get('/api/opportunities', async (req, res) => {
   res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports: sportsList, competitionIds: competitionIdsList, agencies });
 });
 
+// ENV needed:
+//   GHA_TOKEN   = a fine-grained PAT with workflow:write on your repo
+//   GHA_OWNER   = "your-github-username-or-org"
+//   GHA_REPO    = "your-repo-name"
+//   GHA_WORKFLOW= "scrape.yml"    // or the workflow id
+//   GHA_REF     = "main"          // branch to run on
+app.post('/api/request-update', async (req, res) => {
+  try {
+    const token = process.env.GHA_TOKEN;
+    if (!token) return res.status(501).json({ ok:false, error:'GHA not configured' });
+
+    const owner = process.env.GHA_OWNER;
+    const repo  = process.env.GHA_REPO;
+    const wf    = process.env.GHA_WORKFLOW;
+    const ref   = process.env.GHA_REF || 'main';
+
+    const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${wf}/dispatches`;
+
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref, inputs: { manual: 'true' } }) // use inputs if your workflow expects any
+    });
+
+    if (!r.ok) {
+      const t = await r.text();
+      console.error('GHA dispatch failed', r.status, t);
+      return res.status(502).json({ ok:false, error:'dispatch failed' });
+    }
+
+    // Also bust local cache so we refetch when JSON lands
+    cache.ts = 0;
+    res.status(202).json({ ok:true, message:'Workflow dispatched' });
+  } catch (e) {
+    console.error('request-update error:', e);
+    res.status(500).json({ ok:false });
+  }
+});
+
+
+
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
 

@@ -486,6 +486,28 @@ function updateAndFetch() { state.page = 1; fetchData(); }
   el.addEventListener('change', () => { state.filters[id] = el.value; updateAndFetch(); });
 });
 
+// 1) register the element near the other els.* lookups
+els.requestUpdate = document.getElementById('requestUpdate');
+
+// 2) add the click handler alongside the existing `els.refresh?.addEventListener(...)`
+els.requestUpdate?.addEventListener('click', async () => {
+  const btn = els.requestUpdate;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Requesting…';
+  try {
+    const r = await fetch('/api/request-update', { method: 'POST' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // optional: poll until lastUpdated changes, then refresh the table
+    // simple version: just fetch once after a short delay
+    setTimeout(fetchData, 2500);
+  } catch (e) {
+    console.error(e);
+    alert('Could not request an update. Try again shortly.');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
 els.minRoi?.addEventListener('input', () => { els.minRoiValue.textContent = Number(els.minRoi.value).toFixed(1); });
 els.minRoi?.addEventListener('change', () => { state.filters.minRoi = els.minRoi.value; updateAndFetch(); });
 
