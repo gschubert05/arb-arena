@@ -53,26 +53,43 @@ jobs:
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # ✅ Read active_comp_ids.json from origin/data and export COMP_IDS (no local file written)
-      - name: Load active competition IDs (from data branch)
+      - uses: actions/checkout@v4
+
+      - name: Load active competition IDs (from data branch via git)
         run: |
-          git fetch origin data || true
-          COMP_CSV=$(git show origin/data:server/data/active_comp_ids.json 2>/dev/null | python - <<'PY'
-          import sys, json
+          set -euo pipefail
+          # fetch the data branch ref explicitly
+          git fetch --no-tags --depth=1 origin refs/heads/data:refs/remotes/origin/data || true
+
+          # Try to read the JSON from the remote ref
+          CONTENT="$(git show origin/data:server/data/active_comp_ids.json 2>/dev/null || true)"
+
+          if [[ -n "$CONTENT" ]]; then
+            COMP_CSV=$(python - <<'PY'
+          import sys,json
           try:
-              d = json.load(sys.stdin)
-              ids = d.get('active_comp_ids', [])
+              d=json.load(sys.stdin)
+              ids=d.get('active_comp_ids', []) if isinstance(d,dict) else (d if isinstance(d,list) else [])
               print(",".join(str(x) for x in ids))
           except Exception:
               print("")
           PY
-          )
-          if [ -n "$COMP_CSV" ]; then
+          <<< "$CONTENT")
+          if [[ -n "$COMP_CSV" ]]; then
             echo "COMP_IDS=$COMP_CSV" >> $GITHUB_ENV
+            echo "ACTIVE_JSON_URL=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/server/data/active_comp_ids.json" >> $GITHUB_ENV
+            echo "Using COMP_IDS=$COMP_CSV"
           else
+            echo "JSON parse produced empty COMP_CSV; falling back"
             echo "COMP_IDS=10,11" >> $GITHUB_ENV
+            echo "Using COMP_IDS=10,11"
           fi
-          echo "Using COMP_IDS=$COMP_IDS"
+          else
+            echo "git show returned no content; falling back"
+            echo "COMP_IDS=10,11" >> $GITHUB_ENV
+            echo "Using COMP_IDS=10,11"
+          fi
+
 
       - name: Test DNS / curl
         run: curl -v http://odds.aussportsbetting.com/multibet
