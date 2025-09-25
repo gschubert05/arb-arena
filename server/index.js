@@ -8,29 +8,37 @@ import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
+// --- GitHub Actions trigger config ---
 const GH_OWNER = process.env.GH_OWNER || "gschubert05";
 const GH_REPO  = process.env.GH_REPO  || "arb-arena";
 const GH_WORKFLOW_FILE = process.env.GH_WORKFLOW_FILE || "scrape-fast.yml"; // must match your file name in .github/workflows
 const GH_TOKEN = process.env.GH_TOKEN || ""; // fine-grained PAT with Actions:write + Contents:read
-
 let lastManualTs = 0; // simple cooldown
 const COOLDOWN_MS = (Number(process.env.REQUEST_COOLDOWN_SEC) || 180) * 1000;
 
+// --- App + paths ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(helmet({
-  contentSecurityPolicy: false, // keep simple; avoids CSP issues on Render
-}));
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(morgan('tiny'));
 
 const WEB_DIR = path.join(__dirname, '..', 'web');
-const DATA_FILE = path.join(__dirname, 'data', 'opportunities.json');
-const DATA_URL = process.env.DATA_URL ?? '';
 
+// Main data (opportunities)
+const DATA_FILE = path.join(__dirname, 'data', 'opportunities.json');
+const DATA_URL = process.env.DATA_URL ?? ''; // if set, fetch from URL; otherwise read local file
+
+// Active compids + leagues
+const ACTIVE_JSON_PATH = process.env.ACTIVE_JSON_PATH || path.join(__dirname, 'data', 'active_comp_ids.json');
+const ACTIVE_JSON_URL  = process.env.ACTIVE_JSON_URL || ''; // optional: fetch from URL instead of local file
+
+// --- Tiny caches ---
 let cache = { ts: 0, data: { lastUpdated: null, items: [] } };
+let leagueCache = { ts: 0, map: {} }; // { [compid: string]: leagueName }
+const LEAGUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // --- robust fetch with timeout + retries, fallback to cache/local ---
 async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
@@ -42,8 +50,7 @@ async function fetchWithRetry(url, { attempts = 3, timeoutMs = 5000 } = {}) {
       const resp = await fetch(url, {
         cache: 'no-store',
         signal: ac.signal,
-        headers: { 'User-Agent': 'arb-arena/1.0 (+render)' },
-        // keepalive: true  // (node undici ignores in server env)
+        headers: { 'User-Agent': 'arb-arena/1.0 (+server)' },
       });
       clearTimeout(t);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -94,6 +101,30 @@ async function loadData() {
   }
 }
 
+// Load leagues_by_compid (from URL if provided, else local file), with a small cache
+async function loadLeagueMap() {
+  const now = Date.now();
+  if (now - leagueCache.ts < LEAGUE_TTL_MS && leagueCache.map && Object.keys(leagueCache.map).length) {
+    return leagueCache.map;
+  }
+  try {
+    let json;
+    if (ACTIVE_JSON_URL) {
+      json = await fetchWithRetry(ACTIVE_JSON_URL, { attempts: 3, timeoutMs: 6000 });
+    } else {
+      const raw = await fs.readFile(ACTIVE_JSON_PATH, 'utf8');
+      json = JSON.parse(raw);
+    }
+    const map = json?.leagues_by_compid || {};
+    leagueCache = { ts: now, map };
+    return map;
+  } catch {
+    // keep previous if any; else empty map
+    return leagueCache.map || {};
+  }
+}
+
+// --- helpers ---
 function cleanAgency(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
@@ -129,21 +160,26 @@ function coerceKickoffISO(dstr) {
   return d.toISOString();
 }
 
+// --- static web ---
 app.use(express.static(WEB_DIR, { etag: true, lastModified: true, cacheControl: false }));
 
+// --- API: opportunities ---
 app.get('/api/opportunities', async (req, res) => {
+  // Load data + leagues
   let data;
   try {
     data = await loadData();
   } catch {
     data = { lastUpdated: null, items: [] };
   }
+  const leagueMap = await loadLeagueMap();
 
   const {
     sports = '',
     sport = '',
     competitionIds = '',
     competitionId = '',
+    leagues = '',         // NEW: league names (comma-separated)
     dateFrom = '',
     dateTo = '',
     minRoi = '0',
@@ -154,8 +190,10 @@ app.get('/api/opportunities', async (req, res) => {
     bookies = '',
   } = req.query;
 
-  const { lastUpdated, items } = data;
+  const { lastUpdated } = data;
+  const items = Array.isArray(data.items) ? data.items : [];
 
+  // Coerce dates
   for (const it of items) {
     if (!it.dateISO && it.date) {
       const iso = coerceISO(it.date);
@@ -175,10 +213,11 @@ app.get('/api/opportunities', async (req, res) => {
     new Set(String(csv || '').split(',').map(s => s.trim()).filter(Boolean).map(s => s.toLowerCase()));
   const toIdSet = (csv) => new Set(String(csv || '').split(',').map(s => s.trim()).filter(Boolean));
 
-  // Multi: sports & leagues
-  const sportSet = (sports ? toLowerSet(sports) : toLowerSet(sport));
-  const compSet  = (competitionIds ? toIdSet(competitionIds) : toIdSet(competitionId));
-  const bookSet  = toLowerSet(bookies);
+  // Multi: sports & leagues & compids
+  const sportSet  = (sports ? toLowerSet(sports) : toLowerSet(sport));
+  const compSet   = (competitionIds ? toIdSet(competitionIds) : toIdSet(competitionId));
+  const bookSet   = toLowerSet(bookies);
+  const leagueSet = new Set(String(leagues || '').split(',').map(s => s.trim()).filter(Boolean)); // league names are case-sensitive display strings
 
   // ➊ Harden the source list before UI filters/pagination
   const clean = (s) => (s || '').trim().toLowerCase();
@@ -206,12 +245,22 @@ app.get('/api/opportunities', async (req, res) => {
     return true;
   });
 
+  // Attach leagues to cleaned items
+  for (const it of base) {
+    const compId = String(it.competitionid || it.competitionId || '');
+    it.league = leagueMap[compId] || null;
+  }
+
+  // Apply UI filters
   let filtered = base.filter(it => {
     const roiOk = (Number(it.roi) || 0) >= mRoi / 100;
+
     const s = (it.sport || '').toLowerCase();
     const sportOk = sportSet.size === 0 || sportSet.has(s);
+
     const cid = String(it.competitionid || it.competitionId || '');
     const compOk = compSet.size === 0 || compSet.has(cid);
+
     const dfOk = !dateFrom || (it.dateISO && it.dateISO >= dateFrom);
     const dtOk = !dateTo || (it.dateISO && it.dateISO <= dateTo);
 
@@ -222,28 +271,38 @@ app.get('/api/opportunities', async (req, res) => {
       bookOk = !!(leftA && rightA && bookSet.has(leftA) && bookSet.has(rightA));
     }
 
-    return roiOk && sportOk && compOk && dfOk && dtOk && bookOk;
+    const leagueOk = leagueSet.size === 0 ? true : (it.league && leagueSet.has(it.league));
+
+    return roiOk && sportOk && compOk && dfOk && dtOk && bookOk && leagueOk;
   });
 
+  // Sort
   const dir = sortDir === 'asc' ? 1 : -1;
   const key = (a) => {
     switch (sortBy) {
       case 'dateISO': return a.dateISO || '';
       case 'kickoff': return a.kickoff || '';
       case 'sport': return (a.sport || '').toLowerCase();
+      case 'league': return (a.league || '').toLowerCase();
       case 'roi':
       default: return Number(a.roi) || 0;
     }
   };
   filtered.sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * dir);
 
+  // Pagination
   const total = filtered.length;
   const pages = Math.max(1, Math.ceil(total / ps));
   const start = (p - 1) * ps;
   const pageItems = filtered.slice(start, start + ps);
 
-  const sportsList = [...new Set(base.map(i => i.sport).filter(Boolean))].sort((a,b)=>(a||'').localeCompare(b||''));
-  const competitionIdsList = [...new Set(base.map(i => i.competitionid || i.competitionId).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  // Meta lists (built from base to reflect cleaned data)
+  const sportsList = [...new Set(base.map(i => i.sport).filter(Boolean))]
+    .sort((a,b)=>(a||'').localeCompare(b||''));
+  const competitionIdsList = [...new Set(base.map(i => i.competitionid || i.competitionId).filter(Boolean))]
+    .sort((a,b)=>Number(a)-Number(b));
+  const leaguesList = [...new Set(base.map(i => i.league).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
   const agenciesSet = new Set();
   for (const it of base) {
     const l = cleanAgency(it.book_table?.best?.left?.agency || '');
@@ -253,9 +312,21 @@ app.get('/api/opportunities', async (req, res) => {
   }
   const agencies = [...agenciesSet].sort((a,b)=>a.localeCompare(b));
 
-  res.json({ items: pageItems, total, page: p, pages, lastUpdated, sports: sportsList, competitionIds: competitionIdsList, agencies });
+  res.json({
+    ok: true,
+    lastUpdated,
+    total,
+    page: p,
+    pages,
+    sports: sportsList,
+    competitionIds: competitionIdsList,
+    leagues: leaguesList,     // NEW
+    agencies,
+    items: pageItems
+  });
 });
 
+// --- API: trigger GitHub Actions scrape ---
 app.post('/api/trigger-scrape', express.json(), async (req, res) => {
   if (!GH_TOKEN) return res.status(500).json({ ok:false, error: "Server missing GH_TOKEN" });
 
@@ -284,14 +355,17 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
     }
 
     lastManualTs = now;
+    // Lightly bust the data cache so next fetch re-pulls soon
+    cache.ts = 0;
     res.json({ ok:true, message:'Scrape requested.' });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e) });
   }
 });
 
-// SPA fallback
+// --- SPA fallback ---
 app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
 
+// --- start ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Web server running on http://localhost:${PORT}`));

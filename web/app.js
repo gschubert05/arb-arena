@@ -30,7 +30,7 @@ const state = {
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
   _agencies: [],
   _sports: [],
-  _leagues: [],
+  _leagues: [], // array of league names (strings)
 };
 
 const els = {
@@ -97,7 +97,7 @@ function qs() {
   };
   addCsv(state.selectedBookies, state._agencies, 'bookies');
   addCsv(state.selectedSports, state._sports, 'sports');
-  addCsv(state.selectedLeagues, state._leagues, 'competitionIds');
+  addCsv(state.selectedLeagues, state._leagues, 'leagues'); // <-- send leagues by name
 
   return new URLSearchParams(params).toString();
 }
@@ -216,13 +216,11 @@ async function requestUpdateAndPoll() {
   const status = document.getElementById('updateStatus');
   const btn = document.getElementById('requestUpdate');
 
-  // remember the current data "signature" to detect change
   let beforeTotal = Number(document.getElementById('totalCount').textContent) || 0;
 
   btn.disabled = true;
   status.textContent = 'Requesting…';
 
-  // hit the trigger endpoint
   let ok = false, msg = '';
   try {
     const res = await fetch('/api/trigger-scrape', { method: 'POST', headers: { 'Content-Type':'application/json' }});
@@ -238,16 +236,14 @@ async function requestUpdateAndPoll() {
     return;
   }
 
-  status.textContent = 'Updating… (this can take a couple of minutes)';
-  // poll for new data (up to ~5 min, every 15s)
+  status.textContent = 'Updating… (this can take a few minutes)';
   const start = Date.now();
   const limitMs = 5 * 60 * 1000;
   const intervalMs = 15000;
 
   const poll = async () => {
-    await fetchData(); // refresh the table
+    await fetchData();
     const nowTotal = Number(document.getElementById('totalCount').textContent) || 0;
-    // crude signal: count change or just rely on server lastUpdated if you expose it
     if (nowTotal !== beforeTotal) {
       status.textContent = 'Updated ✔';
       btn.disabled = false;
@@ -279,10 +275,8 @@ function isInteractive(el) {
 function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
   wrapEl.innerHTML = '';
 
-  // Treat "All" only when Select All is checked AND no explicit subset
   const treatAllSelected = (selectAllEl.checked === true) && (selectedSet.size === 0 || selectedSet.size >= items.length);
 
-  // Build rows
   items.forEach(v => {
     const id = `${allKey}-${v.toString().replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
@@ -292,43 +286,35 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
     wrapEl.appendChild(row);
   });
 
-  // Keep select-all checkbox in sync
   selectAllEl.checked = treatAllSelected;
 
-  // Individual checkbox handler
   wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const val = cb.getAttribute('data-val');
 
-      // If we were in implicit "All" state, seed the set with ALL items first
       if (selectAllEl.checked === true && selectedSet.size === 0) {
         items.forEach(v => selectedSet.add(v));
       }
 
-      // Apply this toggle to the explicit set
       if (cb.checked) selectedSet.add(val);
       else selectedSet.delete(val);
 
-      // Collapse back to "All" if everything is checked
       if (selectedSet.size >= items.length) {
-        selectedSet.clear();               // empty => means "All"
+        selectedSet.clear();
         selectAllEl.checked = true;
       } else {
-        selectAllEl.checked = false;       // subset
+        selectAllEl.checked = false;
       }
 
       onChange();
     });
   });
 
-  // Select-all handler
   selectAllEl.onchange = () => {
     if (selectAllEl.checked) {
-      // Back to implicit "All"
       selectedSet.clear();
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
-      // Show none ticked (user will then pick a subset)
       selectedSet.clear();
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     }
@@ -343,7 +329,7 @@ function updateSummaryText(set, fullArr, el, labelAll) {
   el.textContent = text;
 }
 
-// --- Dropdown positioning (prevents off-screen overflow) ---
+// --- Dropdown positioning ---
 function positionDropdown(wrapperEl, panelEl) {
   panelEl.style.left = '';
   panelEl.style.right = '';
@@ -398,7 +384,7 @@ async function fetchData() {
   if (els.tzSelect) els.tzSelect.value = state.tz;
 
   const res = await fetch(`/api/opportunities?${qs()}`);
-  const { items, total, page, pages, lastUpdated, sports, competitionIds, agencies } = await res.json();
+  const { items, total, page, pages, lastUpdated, sports, leagues, agencies } = await res.json();
 
   // meta
   els.lastUpdated.textContent = lastUpdated ? fmtWithTZ(lastUpdated) : '—';
@@ -430,11 +416,11 @@ async function fetchData() {
   updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
   updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Render leagues panel
-  const lgNow = JSON.stringify(competitionIds || []);
+  // Render leagues panel (now uses meta.leagues = array of league names)
+  const lgNow = JSON.stringify(leagues || []);
   const lgPrev = JSON.stringify(state._leagues || []);
   if (lgNow !== lgPrev) {
-    state._leagues = (competitionIds || []).slice().map(x => String(x));
+    state._leagues = (leagues || []).slice();
     renderCheckboxPanel({
       items: state._leagues,
       wrapEl: els.leaguesChkWrap,
@@ -480,18 +466,19 @@ async function fetchData() {
 
   for (const it of items) {
     const tr = document.createElement('tr');
-    // exact hover class as requested
     tr.className = 'hover:bg-slate-50';
 
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
 
+    const leagueCell = it.league || '—';
     let bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
 
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
+      <td class="px-4 py-3 whitespace-nowrap">${leagueCell}</td>
       <td class="px-4 py-3">${it.game || ''}</td>
       <td class="px-4 py-3">${it.market || ''}</td>
       <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
@@ -509,7 +496,7 @@ async function fetchData() {
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 7;
+    tdDetails.colSpan = 8; // increased by 1 because we added the League column
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);
@@ -575,7 +562,6 @@ els.reset?.addEventListener('click', () => {
 });
 
 els.refresh?.addEventListener('click', fetchData);
-
 document.getElementById('requestUpdate')?.addEventListener('click', requestUpdateAndPoll);
 
 // header sorting

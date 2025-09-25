@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from typing import Dict, List, Optional, Set, Tuple
@@ -46,6 +47,27 @@ def parse_range(range_str: str) -> List[int]:
         else:
             out.append(int(piece))
     return out
+
+# NEW: module-level side-channel for league names
+LEAGUES_BY_COMPID: Dict[str, str] = {}
+
+# add helper
+def extract_league_name(page_html: str) -> Optional[str]:
+    """Read <td id="datapage-title-strip"><h1>…</h1></td> and strip trailing 'live odds'."""
+    soup = BeautifulSoup(page_html, "html.parser")
+    td = soup.find("td", id="datapage-title-strip")
+    if not td:
+        return None
+    h1 = td.find("h1")
+    if not h1:
+        return None
+    txt = h1.get_text(" ", strip=True)
+    if not txt:
+        return None
+    # remove trailing "live odds" (any case, allow stray punctuation/spaces before it)
+    txt = re.sub(r"[\s–-]*live\s*odds\s*$", "", txt, flags=re.IGNORECASE)
+    return txt.strip() or None
+
 
 def ensure_dir(path: Optional[str]) -> None:
     if path:
@@ -134,6 +156,12 @@ def check_competition(
         html = driver.page_source
         is_active, reason, counts = inspect_dom(html)
 
+        # somewhere inside check_competition(), right after you set `html = driver.page_source`
+        league = extract_league_name(html)
+        if league:
+            LEAGUES_BY_COMPID[str(comp_id)] = league
+
+
         # Save assets if requested
         if save_all_html_dir: save_html(save_all_html_dir, comp_id, html)
         if save_all_screens_dir: save_screenshot(driver, save_all_screens_dir, comp_id)
@@ -213,8 +241,10 @@ def main():
             "range": args.range or (f"{args.single}" if args.single is not None else "1-150"),
             "skip": sorted(list(skip)),
             "active_comp_ids": active,
-            "debug_counts": meta_per_id,  # optional extra debug
+            "leagues_by_compid": LEAGUES_BY_COMPID,   # <-- NEW
+            "debug_counts": meta_per_id,
         }, f, ensure_ascii=False, indent=2)
+
 
     # Print compact CSV for CI piping
     print(",".join(str(x) for x in active))
