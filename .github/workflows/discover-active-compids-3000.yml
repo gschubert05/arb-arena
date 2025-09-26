@@ -1,9 +1,7 @@
-name: Discover active comp IDs (daily)
+name: Discover active comp IDs (3000)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "12 0 * * *"  # daily at 00:12 UTC
 
 permissions:
   contents: write
