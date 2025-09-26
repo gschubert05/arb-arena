@@ -3,14 +3,14 @@ name: Scrape (FAST + notify)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "2-59/10 * * * *"   # every 10 minutes, starting at :02 UTC
+    - cron: "2-59/5 * * * *"   # every 10 minutes, starting at :02 UTC
 
 permissions:
   contents: write
 
 concurrency:
   group: scrape-arena
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   ROI_THRESHOLD_PCT: "2.0"
