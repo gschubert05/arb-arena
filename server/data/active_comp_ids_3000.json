@@ -1,0 +1,142 @@
+{
+  "discoveredAt": "2025-09-26T12:09:05Z",
+  "range": "2080-2100",
+  "skip": [],
+  "active_comp_ids": [
+    2081,
+    2087,
+    2089,
+    2096,
+    2100
+  ],
+  "leagues_by_compid": {
+    "2080": "Desert Diamond Cup",
+    "2081": "Australian FFA Cup",
+    "2082": "Irish Super Cup",
+    "2083": "Sports Betting Markets",
+    "2084": "QLD Premier Rugby",
+    "2085": "Russian Basket Wom PBL",
+    "2086": "Russian Basketball Superleague",
+    "2087": "Dota 2",
+    "2088": "Brazil Camp. Paulista A3",
+    "2089": "US NWSL",
+    "2090": "Political Elections Australia",
+    "2091": "Political Elections US",
+    "2092": "Political Elections UK",
+    "2093": "Euro Rugby Champions Cup",
+    "2094": "Peru Liga Nacional Basketball",
+    "2095": "Mexican Super Cup",
+    "2096": "Polish II Liga",
+    "2097": "Ukraine Druha Liga 2016/17",
+    "2098": "UK Royal London One Day Cup",
+    "2099": "National Rugby Champ 2019",
+    "2100": "Italy Serie C Group C"
+  },
+  "debug_counts": {
+    "2080": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2081": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 4
+    },
+    "2082": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2083": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2084": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2085": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2086": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2087": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 3
+    },
+    "2088": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2089": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 4
+    },
+    "2090": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2091": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2092": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2093": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2094": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2095": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2096": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 4
+    },
+    "2097": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2098": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2099": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 0
+    },
+    "2100": {
+      "td_more_market_odds": 0,
+      "a_addSelection": 0,
+      "market_header_tables": 4
+    }
+  }
+}
