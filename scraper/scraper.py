@@ -51,9 +51,14 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
 # ========= Driver =========
 def make_driver() -> webdriver.Chrome:
     """
-    Minimal, test-like setup — but force the exact Chrome that setup-chrome installed.
-    Headless toggle via FORCE_HEADLESS (default: true). Works under Xvfb if set to false.
+    Deterministic Chrome + Chromedriver, headless toggle, and (critical) FORCE DIRECT network:
+    - Clear proxy envs (Chrome inherits them otherwise)
+    - Force direct:// and bypass list to avoid CI proxies causing ERR_CONNECTION_REFUSED
     """
+    # 🔒 nuke proxy env that Chrome would inherit
+    for k in ("http_proxy","https_proxy","HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","all_proxy","NO_PROXY","no_proxy"):
+        os.environ.pop(k, None)
+
     headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
 
     options = Options()
@@ -62,19 +67,26 @@ def make_driver() -> webdriver.Chrome:
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1600,1200")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                         "AppleWebKit/537.36 (KHTML, like Gecko) "
-                         "Chrome/124.0.0.0 Safari/537.36")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-extensions")
     options.add_argument("--lang=en-US")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                         "AppleWebKit/537.36 (KHTML, like Gecko) "
+                         "Chrome/124.0.0.0 Safari/537.36")
 
-    # 🔒 force the Chrome from setup-chrome (prevents picking /opt/google/chrome accidentally)
+    # ✅ Force **direct** networking (ignore any proxy settings in runner)
+    options.add_argument("--proxy-server=direct://")
+    options.add_argument("--proxy-bypass-list=*")
+
+    # Optional: prefer IPv4 (avoids some v6-only refusals)
+    options.add_argument("--disable-ipv6")
+
+    # Use the exact Chrome/Driver that setup-chrome installed
     chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
     if chrome_bin:
         options.binary_location = chrome_bin
-
     chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
     service = Service(chromedriver_path) if chromedriver_path else Service()
 
@@ -83,8 +95,6 @@ def make_driver() -> webdriver.Chrome:
     print(f"[driver] chrome_bin={getattr(options, 'binary_location', None)} | "
           f"chromedriver={chromedriver_path} | headless={headless}")
     return driver
-
-
 
 # ========= DOM helpers =========
 def _find_in_any_frame_multi(driver, locators, timeout=20):
@@ -134,55 +144,38 @@ def _doc_ready(driver, timeout=20):
         lambda d: d.execute_script("return document.readyState") in ("interactive", "complete")
     )
 
-def _looks_empty_html(html: str) -> bool:
-    # Typical blank page body we saw in logs
-    return bool(html) and ("<body></body>" in html.replace("\n","").replace(" ",""))
-
 def _navigate_multibet(driver, timeout=25) -> None:
     """
-    Robust navigation to the MultiBet page:
-      - try http first; if DOM is empty, retry once; then try https (if supported) as a fallback
-      - wait for readyState and a minimal DOM signal (any <iframe> or a <form>/<select>)
-    Raises TimeoutError if it can't get a non-empty DOM.
+    Navigate robustly and handle transient network/proxy hiccups:
+    - Retry a few times
+    - Try http then https
+    - After navigation, ensure DOM isn't empty
+    Raises TimeoutError if it can't get a usable DOM.
     """
-    candidates = [
+    urls = [
         "http://odds.aussportsbetting.com/multibet",
-        "https://odds.aussportsbetting.com/multibet",  # harmless if not supported
+        "https://odds.aussportsbetting.com/multibet",
     ]
-    last_html = ""
-    for url in candidates:
-        for attempt in range(2):
-            driver.get(url)
+    last_exc = None
+    for url in urls:
+        for attempt in range(3):
             try:
+                driver.get(url)
                 _doc_ready(driver, timeout=timeout)
-            except Exception:
-                pass
-
-            # Give the renderer a tick in CI
-            time.sleep(0.6)
-
-            html = driver.page_source or ""
-            last_html = html
-
-            # quick structural check
-            if not _looks_empty_html(html):
-                # also confirm we see *something* we can later traverse
-                try:
-                    if driver.find_elements(By.TAG_NAME, "iframe"):
+                # small settle
+                time.sleep(0.6)
+                html = driver.page_source or ""
+                if "<body></body>" not in html.replace("\n", "").replace(" ", ""):
+                    # basic sanity: something is there (form/select/iframe)
+                    if driver.find_elements(By.TAG_NAME, "iframe") or \
+                       driver.find_elements(By.TAG_NAME, "form")   or \
+                       driver.find_elements(By.TAG_NAME, "select"):
                         return
-                    if driver.find_elements(By.TAG_NAME, "form"):
-                        return
-                    if driver.find_elements(By.TAG_NAME, "select"):
-                        return
-                except Exception:
-                    pass
-            # brief backoff then retry
+            except Exception as e:
+                last_exc = e
             time.sleep(0.8)
 
-    # If we reach here, we never saw a non-empty DOM
-    raise TimeoutError("MultiBet page did not render a usable DOM (last 400 chars: "
-                       + (last_html[-400:].replace("\n"," ") if last_html else "<none>") + ")")
-
+    raise TimeoutError(f"MultiBet page did not render (last error: {last_exc})")
 
 def extract_search_phrase(match_text: str) -> str:
     """
@@ -202,20 +195,16 @@ def extract_search_phrase(match_text: str) -> str:
 # === First stage: scrape MultiBet page for pairs ===
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-
-    # robust navigation (handles the empty-body issue we saw)
     _navigate_multibet(driver, timeout=25)
 
-    # try both names & both element types, top and iframes
     comp_locators = [
         (By.NAME, "compid"), (By.ID, "compid"),
         (By.NAME, "competitionid"), (By.ID, "competitionid"),
         (By.CSS_SELECTOR, 'select[name="compid"]'),
         (By.CSS_SELECTOR, 'select[name="competitionid"]'),
     ]
-
-    try:
-        input_el = _find_in_any_frame_multi(driver, comp_locators, timeout=25)
+    input_el = _find_in_any_frame_multi(driver, comp_locators, timeout=25)
+    # ... (rest unchanged)
     except Exception:
         # lightweight diagnostics
         print("[diag] main page first 2000 chars:")
