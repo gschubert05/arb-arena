@@ -1,5 +1,5 @@
 {
-  "discoveredAt": "2025-10-02T08:16:20Z",
+  "discoveredAt": "2025-10-02T08:28:44Z",
   "range": "1-150,450,650",
   "skip": [
     72,
@@ -704,7 +704,7 @@
     "96": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 2
     },
     "97": {
       "td_more_market_odds": 0,
