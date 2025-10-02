@@ -49,16 +49,18 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
 
 
 def make_driver() -> webdriver.Chrome:
+    """
+    Original setup, plus:
+      - clear any inherited proxy env so Chrome doesn't use a proxy
+      - force direct networking, prefer IPv4
+      - allow plain-HTTP origin to load in modern Chrome
+    """
+    # Show any proxy env for debugging (optional; remove once confirmed)
+    print("[env-proxy]", {k: v for k, v in os.environ.items() if "proxy" in k.lower()})
 
-    print("[env-proxy]", {k:v for k,v in os.environ.items() if "proxy" in k.lower()})
-    """
-    Same as your original, but:
-      - remove any inherited proxy env (Chrome inherits these otherwise)
-      - force Chrome to connect directly (no proxy), prefer IPv4
-    Keeps all your existing flags & CHROME_BIN/CHROMEDRIVER_PATH wiring.
-    """
-    # Kill any proxy env so Chrome doesn't inherit them
-    for k in ("http_proxy","https_proxy","HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","all_proxy","NO_PROXY","no_proxy"):
+    # Ensure Chrome won't inherit a proxy from the environment
+    for k in ("http_proxy","https_proxy","HTTP_PROXY","HTTPS_PROXY",
+              "ALL_PROXY","all_proxy","NO_PROXY","no_proxy"):
         os.environ.pop(k, None)
 
     headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
@@ -74,19 +76,26 @@ def make_driver() -> webdriver.Chrome:
     opts.add_argument("--no-first-run")
     opts.add_argument("--no-default-browser-check")
     opts.add_argument("--disable-extensions")
-    # Make headless DOM closer to headed
+    # Keep your original CI tweaks
     opts.add_argument("--disable-blink-features=AutomationControlled")
-    # Your original CI tweak (leave it in)
     opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
-    # Realistic UA (unchanged)
-    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/124.0.0.0 Safari/537.36")
 
-    # ⛑️ Force direct networking & prefer IPv4 (avoids ERR_CONNECTION_REFUSED via runner proxies / IPv6)
+    # ✅ Networking: force direct + prefer IPv4
     opts.add_argument("--proxy-server=direct://")
     opts.add_argument("--proxy-bypass-list=*")
     opts.add_argument("--disable-ipv6")
+    # (optional) nudge resolver to avoid IPv6 lookups in some runners
+    opts.add_argument("--host-resolver-rules=EXCLUDE_IPV6")
+
+    # ✅ Allow loading from a plain-HTTP origin in newer Chrome
+    # (these relax mixed/insecure content restrictions that tightened in Chrome 140+)
+    opts.add_argument("--allow-running-insecure-content")
+    opts.add_argument("--unsafely-treat-insecure-origin-as-secure=http://odds.aussportsbetting.com")
+
+    # Realistic UA (same as your original/test)
+    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36")
 
     # Use the exact Chrome from setup-chrome
     chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
@@ -101,7 +110,6 @@ def make_driver() -> webdriver.Chrome:
     drv.set_page_load_timeout(45)
     print(f"[driver] chrome_bin={getattr(opts, 'binary_location', None)} | chromedriver={chromedriver_path} | headless={headless}")
     return drv
-
 
 def _find_in_any_frame(driver, by, value, timeout=15):
     """
