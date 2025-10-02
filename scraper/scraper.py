@@ -48,134 +48,83 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
     return [i for i in out if i not in SKIP_IDS]
 
 
-# ========= Driver =========
 def make_driver() -> webdriver.Chrome:
     """
-    Deterministic Chrome + Chromedriver, headless toggle, and (critical) FORCE DIRECT network:
-    - Clear proxy envs (Chrome inherits them otherwise)
-    - Force direct:// and bypass list to avoid CI proxies causing ERR_CONNECTION_REFUSED
+    Same as your original, but:
+      - remove any inherited proxy env (Chrome inherits these otherwise)
+      - force Chrome to connect directly (no proxy), prefer IPv4
+    Keeps all your existing flags & CHROME_BIN/CHROMEDRIVER_PATH wiring.
     """
-    # 🔒 nuke proxy env that Chrome would inherit
+    # Kill any proxy env so Chrome doesn't inherit them
     for k in ("http_proxy","https_proxy","HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","all_proxy","NO_PROXY","no_proxy"):
         os.environ.pop(k, None)
 
     headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
 
-    options = Options()
+    opts = Options()
     if headless:
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1600,1200")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-first-run")
-    options.add_argument("--no-default-browser-check")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--lang=en-US")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                         "AppleWebKit/537.36 (KHTML, like Gecko) "
-                         "Chrome/124.0.0.0 Safari/537.36")
+        opts.add_argument("--headless=new")    # modern headless
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1600,1200")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-software-rasterizer")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--disable-extensions")
+    # Make headless DOM closer to headed
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    # Your original CI tweak (leave it in)
+    opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    # Realistic UA (unchanged)
+    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36")
 
-    # ✅ Force **direct** networking (ignore any proxy settings in runner)
-    options.add_argument("--proxy-server=direct://")
-    options.add_argument("--proxy-bypass-list=*")
+    # ⛑️ Force direct networking & prefer IPv4 (avoids ERR_CONNECTION_REFUSED via runner proxies / IPv6)
+    opts.add_argument("--proxy-server=direct://")
+    opts.add_argument("--proxy-bypass-list=*")
+    opts.add_argument("--disable-ipv6")
 
-    # Optional: prefer IPv4 (avoids some v6-only refusals)
-    options.add_argument("--disable-ipv6")
-
-    # Use the exact Chrome/Driver that setup-chrome installed
+    # Use the exact Chrome from setup-chrome
     chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
     if chrome_bin:
-        options.binary_location = chrome_bin
+        opts.binary_location = chrome_bin
+
+    # Use the exact chromedriver from setup-chrome
     chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
     service = Service(chromedriver_path) if chromedriver_path else Service()
 
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(45)
-    print(f"[driver] chrome_bin={getattr(options, 'binary_location', None)} | "
-          f"chromedriver={chromedriver_path} | headless={headless}")
-    return driver
+    drv = webdriver.Chrome(service=service, options=opts)
+    drv.set_page_load_timeout(45)
+    print(f"[driver] chrome_bin={getattr(opts, 'binary_location', None)} | chromedriver={chromedriver_path} | headless={headless}")
+    return drv
 
-# ========= DOM helpers =========
-def _find_in_any_frame_multi(driver, locators, timeout=20):
+
+def _find_in_any_frame(driver, by, value, timeout=15):
     """
-    Try (By, value) pairs in the top doc, then in each iframe. Returns WebElement or raises TimeoutError.
+    Same frame search behavior as your test script:
+    try top document, then all iframes, until found or timeout.
     """
     deadline = time.time() + timeout
-    last_err = None
     while time.time() < deadline:
-        # top
         try:
             driver.switch_to.default_content()
-            for by, val in locators:
-                try:
-                    el = WebDriverWait(driver, 3).until(EC.presence_of_element_located((by, val)))
-                    return el
-                except Exception as e:
-                    last_err = e
-        except Exception as e:
-            last_err = e
-
-        # frames
-        try:
-            frames = driver.find_elements(By.TAG_NAME, "iframe")
+            return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
         except Exception:
-            frames = []
+            pass
+        frames = driver.find_elements(By.TAG_NAME, "iframe")
         for fr in frames:
             try:
                 driver.switch_to.default_content()
                 driver.switch_to.frame(fr)
-                for by, val in locators:
-                    try:
-                        el = WebDriverWait(driver, 3).until(EC.presence_of_element_located((by, val)))
-                        return el
-                    except Exception as e:
-                        last_err = e
-            except Exception as e:
-                last_err = e
-
-        time.sleep(0.25)
-
+                return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
+            except Exception:
+                pass
+        time.sleep(0.3)
     driver.switch_to.default_content()
-    raise TimeoutError(f"Could not locate any of {[v for _, v in locators]} in any frame; last={last_err}")
+    raise TimeoutError(f"Could not locate {value} in any frame")
 
-def _doc_ready(driver, timeout=20):
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") in ("interactive", "complete")
-    )
-
-def _navigate_multibet(driver, timeout=25) -> None:
-    """
-    Navigate robustly and handle transient network/proxy hiccups:
-    - Retry a few times
-    - Try http then https
-    - After navigation, ensure DOM isn't empty
-    Raises TimeoutError if it can't get a usable DOM.
-    """
-    urls = [
-        "http://odds.aussportsbetting.com/multibet",
-        "https://odds.aussportsbetting.com/multibet",
-    ]
-    last_exc = None
-    for url in urls:
-        for attempt in range(3):
-            try:
-                driver.get(url)
-                _doc_ready(driver, timeout=timeout)
-                # small settle
-                time.sleep(0.6)
-                html = driver.page_source or ""
-                if "<body></body>" not in html.replace("\n", "").replace(" ", ""):
-                    # basic sanity: something is there (form/select/iframe)
-                    if driver.find_elements(By.TAG_NAME, "iframe") or \
-                       driver.find_elements(By.TAG_NAME, "form")   or \
-                       driver.find_elements(By.TAG_NAME, "select"):
-                        return
-            except Exception as e:
-                last_exc = e
-            time.sleep(0.8)
-
-    raise TimeoutError(f"MultiBet page did not render (last error: {last_exc})")
 
 def extract_search_phrase(match_text: str) -> str:
     """
@@ -191,77 +140,52 @@ def extract_search_phrase(match_text: str) -> str:
     except Exception:
         return match_text
 
+def _goto_multibet(driver: webdriver.Chrome, timeout: int = 20) -> None:
+    """
+    Super small, robust nav:
+      - try http then https (some runners/proxies refuse http)
+      - 3 quick attempts each
+      - ensure document.readyState, and that the DOM isn't an empty <body></body>
+    """
+    urls = [
+        "http://odds.aussportsbetting.com/multibet",
+        "https://odds.aussportsbetting.com/multibet",
+    ]
+    last_err = None
+    for url in urls:
+        for _ in range(3):
+            try:
+                driver.get(url)
+                WebDriverWait(driver, timeout).until(
+                    lambda d: d.execute_script("return document.readyState") in ("interactive","complete")
+                )
+                # tiny settle helps CI paint
+                time.sleep(0.5)
+                html = (driver.page_source or "").replace("\n","").replace(" ","")
+                if "<body></body>" not in html:
+                    return
+            except Exception as e:
+                last_err = e
+            time.sleep(0.5)
+    raise TimeoutError(f"Failed to load MultiBet page (last error: {last_err})")
+
 
 # === First stage: scrape MultiBet page for pairs ===
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    _navigate_multibet(driver, timeout=25)
+    _goto_multibet(driver) 
 
-    comp_locators = [
-        (By.NAME, "compid"), (By.ID, "compid"),
-        (By.NAME, "competitionid"), (By.ID, "competitionid"),
-        (By.CSS_SELECTOR, 'select[name="compid"]'),
-        (By.CSS_SELECTOR, 'select[name="competitionid"]'),
-    ]
-    input_el = _find_in_any_frame_multi(driver, comp_locators, timeout=25)
-    # ... (rest unchanged)
-    except Exception:
-        # lightweight diagnostics
-        print("[diag] main page first 2000 chars:")
-        try:
-            print((driver.page_source or "")[:2000])
-        except Exception:
-            pass
-        try:
-            frames = driver.find_elements(By.TAG_NAME, "iframe")
-            print(f"[diag] iframe count: {len(frames)}")
-            for i, fr in enumerate(frames[:3], 1):
-                try:
-                    driver.switch_to.default_content()
-                    driver.switch_to.frame(fr)
-                    sub = driver.page_source
-                    print(f"[diag] iframe {i} first 1200 chars:\n{sub[:1200]}")
-                except Exception as e:
-                    print(f"[diag] iframe {i} error: {e}")
-        finally:
-            driver.switch_to.default_content()
-        raise
-
-    # set value regardless of input/select
-    tag = (input_el.tag_name or "").lower()
-    if tag == "select":
-        driver.execute_script(
-            "const el=arguments[0]; el.value=String(arguments[1]); el.dispatchEvent(new Event('change',{bubbles:true}));",
-            input_el, compid
-        )
-    else:
-        driver.execute_script(
-            "const el=arguments[0]; el.value=String(arguments[1]); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));",
-            input_el, compid
-        )
+    # EXACTLY like the test script: look for name="compid" and id="update"
+    input_el = _find_in_any_frame(driver, By.NAME, "compid", timeout=20)
+    driver.execute_script("arguments[0].value = arguments[1];", input_el, compid)
+    driver.execute_script("arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", input_el)
 
     driver.switch_to.default_content()
+    update_btn = _find_in_any_frame(driver, By.ID, "update", timeout=20)
+    update_btn.click()
 
-    # Update button in a few forms
-    update_locators = [
-        (By.ID, "update"),
-        (By.CSS_SELECTOR, "input#update"),
-        (By.CSS_SELECTOR, "button#update"),
-        (By.CSS_SELECTOR, 'input[type="submit"][value*="Update" i]'),
-        (By.XPATH, '//input[@type="submit" and contains(translate(@value,"UPDATE","update"),"update")]'),
-        (By.XPATH, '//button[contains(translate(.,"UPDATE","update"),"update")]'),
-    ]
-    update_btn = _find_in_any_frame_multi(driver, update_locators, timeout=20)
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", update_btn)
-    try:
-        update_btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", update_btn)
-
-    # wait for odds to appear
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "more-market-odds")))
-    time.sleep(1.0)  # settle
-    # ... (your existing parsing below remains the same)
+    time.sleep(1.0)  # small settle to ensure table is populated
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
 
@@ -561,28 +485,30 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
                     table_cache[key] = _scrape_betting_table_for_search(driver, url, phrase)
                 table = table_cache[key]
 
+            # --- inside run_once(), in the "verified" build loop after we've set `table` ---
             if table:
                 it["book_table"] = table
 
-                # Exclude if ANY agency is exactly "Bookmaker"
+                # ➊ Exclude if ANY agency in the table is exactly "Bookmaker"
                 has_bookmaker = any(
                     (r.get("agency") or "").strip().lower() == "bookmaker"
                     for r in (table.get("rows") or [])
                 )
                 if has_bookmaker:
-                    continue
+                    continue  # drop this row entirely
 
                 best = table.get("best") or {}
                 L = (best.get("left")  or {}).get("odds")
                 R = (best.get("right") or {}).get("odds")
 
-                # If we have current best prices, recompute market% and ROI and keep only if still an arb
+                # ➋ If we have current best prices, recompute market% and ROI and keep only if still an arb
                 if isinstance(L, (int, float)) and isinstance(R, (int, float)) and L > 0 and R > 0:
                     new_market_pct = ((1.0 / L) + (1.0 / R)) * 100.0
                     if new_market_pct >= 100.0:
                         continue  # no longer an arbitrage after the best-odds refresh
                     it["market_percentage"] = round(new_market_pct, 2)
                     it["roi"] = round((1.0 / (new_market_pct / 100.0)) - 1.0, 6)
+
 
             verified.append(it)
 
