@@ -49,6 +49,8 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
 
 
 def make_driver() -> webdriver.Chrome:
+
+    print("[env-proxy]", {k:v for k,v in os.environ.items() if "proxy" in k.lower()})
     """
     Same as your original, but:
       - remove any inherited proxy env (Chrome inherits these otherwise)
