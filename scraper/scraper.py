@@ -48,21 +48,17 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
     return [i for i in out if i not in SKIP_IDS]
 
 
+# ========= Driver =========
 def make_driver() -> webdriver.Chrome:
     """
-    Launch exactly the Chrome that the workflow installed, with the matching Chromedriver.
-    Keep headless optional via FORCE_HEADLESS env.
+    Launch the Chrome that Actions installed (CHROME_BIN) with the matching Chromedriver (CHROMEDRIVER_PATH).
+    Headless can be toggled with FORCE_HEADLESS (default true). Works under Xvfb too (set FORCE_HEADLESS=false).
     """
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.chrome.service import Service
-    from selenium import webdriver
-    import os
-
     headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
 
     opts = Options()
     if headless:
-        opts.add_argument("--headless=new")    # modern headless
+        opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1600,1200")
@@ -71,17 +67,19 @@ def make_driver() -> webdriver.Chrome:
     opts.add_argument("--no-first-run")
     opts.add_argument("--no-default-browser-check")
     opts.add_argument("--disable-extensions")
-    # Make headless DOM closer to headed
+    # help CI behave like headed
     opts.add_argument("--disable-blink-features=AutomationControlled")
-    # Iframes sometimes fail under strict process isolation in CI
+    # sometimes helps iframe content render in CI
     opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    # realistic UA (same as your working test)
+    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36")
 
-    # Use the exact Chrome from setup-chrome
     chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
     if chrome_bin:
         opts.binary_location = chrome_bin
 
-    # Use the exact chromedriver from setup-chrome
     chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
     service = Service(chromedriver_path) if chromedriver_path else Service()
 
@@ -90,29 +88,48 @@ def make_driver() -> webdriver.Chrome:
     return drv
 
 
-def _find_in_any_frame(driver, by, value, timeout=15):
+# ========= DOM helpers =========
+def _find_in_any_frame_multi(driver, locators, timeout=20):
     """
-    Same frame search behavior as your test script:
-    try top document, then all iframes, until found or timeout.
+    Try (By, value) pairs in the top doc, then in each iframe. Returns WebElement or raises TimeoutError.
     """
     deadline = time.time() + timeout
+    last_err = None
     while time.time() < deadline:
+        # top
         try:
             driver.switch_to.default_content()
-            return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
+            for by, val in locators:
+                try:
+                    el = WebDriverWait(driver, 3).until(EC.presence_of_element_located((by, val)))
+                    return el
+                except Exception as e:
+                    last_err = e
+        except Exception as e:
+            last_err = e
+
+        # frames
+        try:
+            frames = driver.find_elements(By.TAG_NAME, "iframe")
         except Exception:
-            pass
-        frames = driver.find_elements(By.TAG_NAME, "iframe")
+            frames = []
         for fr in frames:
             try:
                 driver.switch_to.default_content()
                 driver.switch_to.frame(fr)
-                return WebDriverWait(driver, 2).until(EC.presence_of_element_located((by, value)))
-            except Exception:
-                pass
-        time.sleep(0.3)
+                for by, val in locators:
+                    try:
+                        el = WebDriverWait(driver, 3).until(EC.presence_of_element_located((by, val)))
+                        return el
+                    except Exception as e:
+                        last_err = e
+            except Exception as e:
+                last_err = e
+
+        time.sleep(0.25)
+
     driver.switch_to.default_content()
-    raise TimeoutError(f"Could not locate {value} in any frame")
+    raise TimeoutError(f"Could not locate any of {[v for _, v in locators]} in any frame; last={last_err}")
 
 
 def extract_search_phrase(match_text: str) -> str:
@@ -135,14 +152,71 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
     rows: List[Dict[str, Any]] = []
     driver.get(TARGET_URL)
 
-    # EXACTLY like the test script: look for name="compid" and id="update"
-    input_el = _find_in_any_frame(driver, By.NAME, "compid", timeout=20)
-    driver.execute_script("arguments[0].value = arguments[1];", input_el, compid)
-    driver.execute_script("arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", input_el)
+    # ensure something rendered
+    WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+    # input/select could be name/id compid or competitionid; try both in top + iframes
+    comp_locators = [
+        (By.NAME, "compid"), (By.ID, "compid"),
+        (By.NAME, "competitionid"), (By.ID, "competitionid"),
+        (By.CSS_SELECTOR, 'select[name="compid"]'),
+        (By.CSS_SELECTOR, 'select[name="competitionid"]'),
+    ]
+
+    try:
+        input_el = _find_in_any_frame_multi(driver, comp_locators, timeout=25)
+    except Exception:
+        # lightweight diagnostics to log what's actually rendered
+        print("[diag] main page first 2000 chars:")
+        try:
+            print((driver.page_source or "")[:2000])
+        except Exception:
+            pass
+        try:
+            frames = driver.find_elements(By.TAG_NAME, "iframe")
+            print(f"[diag] iframe count: {len(frames)}")
+            for i, fr in enumerate(frames[:3], 1):
+                try:
+                    driver.switch_to.default_content()
+                    driver.switch_to.frame(fr)
+                    sub = driver.page_source
+                    print(f"[diag] iframe {i} first 1200 chars:\n{sub[:1200]}")
+                except Exception as e:
+                    print(f"[diag] iframe {i} error: {e}")
+        finally:
+            driver.switch_to.default_content()
+        raise
+
+    # set the value regardless of input/select
+    tag = (input_el.tag_name or "").lower()
+    if tag == "select":
+        driver.execute_script(
+            "const el=arguments[0]; el.value=String(arguments[1]); el.dispatchEvent(new Event('change',{bubbles:true}));",
+            input_el, compid
+        )
+    else:
+        driver.execute_script(
+            "const el=arguments[0]; el.value=String(arguments[1]); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));",
+            input_el, compid
+        )
 
     driver.switch_to.default_content()
-    update_btn = _find_in_any_frame(driver, By.ID, "update", timeout=20)
-    update_btn.click()
+
+    # Update button comes in a few forms; try several
+    update_locators = [
+        (By.ID, "update"),
+        (By.CSS_SELECTOR, "input#update"),
+        (By.CSS_SELECTOR, "button#update"),
+        (By.CSS_SELECTOR, 'input[type="submit"][value*="Update" i]'),
+        (By.XPATH, '//input[@type="submit" and contains(translate(@value,"UPDATE","update"),"update")]'),
+        (By.XPATH, '//button[contains(translate(.,"UPDATE","update"),"update")]'),
+    ]
+    update_btn = _find_in_any_frame_multi(driver, update_locators, timeout=20)
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", update_btn)
+    try:
+        update_btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", update_btn)
 
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "more-market-odds")))
     time.sleep(1.0)  # small settle to ensure table is populated
@@ -445,30 +519,28 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
                     table_cache[key] = _scrape_betting_table_for_search(driver, url, phrase)
                 table = table_cache[key]
 
-            # --- inside run_once(), in the "verified" build loop after we've set `table` ---
             if table:
                 it["book_table"] = table
 
-                # ➊ Exclude if ANY agency in the table is exactly "Bookmaker"
+                # Exclude if ANY agency is exactly "Bookmaker"
                 has_bookmaker = any(
                     (r.get("agency") or "").strip().lower() == "bookmaker"
                     for r in (table.get("rows") or [])
                 )
                 if has_bookmaker:
-                    continue  # drop this row entirely
+                    continue
 
                 best = table.get("best") or {}
                 L = (best.get("left")  or {}).get("odds")
                 R = (best.get("right") or {}).get("odds")
 
-                # ➋ If we have current best prices, recompute market% and ROI and keep only if still an arb
+                # If we have current best prices, recompute market% and ROI and keep only if still an arb
                 if isinstance(L, (int, float)) and isinstance(R, (int, float)) and L > 0 and R > 0:
                     new_market_pct = ((1.0 / L) + (1.0 / R)) * 100.0
                     if new_market_pct >= 100.0:
                         continue  # no longer an arbitrage after the best-odds refresh
                     it["market_percentage"] = round(new_market_pct, 2)
                     it["roi"] = round((1.0 / (new_market_pct / 100.0)) - 1.0, 6)
-
 
             verified.append(it)
 
