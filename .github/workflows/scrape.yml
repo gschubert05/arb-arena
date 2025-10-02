@@ -44,6 +44,16 @@ jobs:
         run: |
           echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
           echo "CHROMEDRIVER_PATH=${{ steps.setup-chrome.outputs.chromedriver-path }}" >> $GITHUB_ENV
+          # Make chromedriver preferred on PATH and hint some runtimes
+          echo "PATH=$(dirname ${{ steps.setup-chrome.outputs.chromedriver-path }}):$PATH" >> $GITHUB_ENV
+          echo "GOOGLE_CHROME_SHIM=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+
+      - name: Check Chrome/Driver versions (sanity)
+        run: |
+          echo "Chrome: $CHROME_BIN"
+          "$CHROME_BIN" --version || true
+          echo "ChromeDriver: $CHROMEDRIVER_PATH"
+          "$CHROMEDRIVER_PATH" --version || true
 
       - name: Install Python dependencies
         run: |

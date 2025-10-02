@@ -49,20 +49,40 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
 
 
 def make_driver() -> webdriver.Chrome:
-    """
-    Keep exactly the same Chrome/Selenium setup as your working test.
-    (Headless, minimal flags, and CHROMEDRIVER_PATH from the workflow.)
-    """
+    headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
     options = Options()
-    options.add_argument("--headless=new")
+    if headless:
+        options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1600,1200")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/124.0.0.0 Safari/537.36")
-    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+
+    # 🔒 Force the correct Chrome binary (from setup-chrome)
+    chrome_bin = (
+        os.environ.get("CHROME_BIN")
+        or os.environ.get("GOOGLE_CHROME_SHIM")
+    )
+    if chrome_bin:
+        options.binary_location = chrome_bin
+    else:
+        # Last-resort: avoid picking system /opt/google/chrome by accident
+        # (you can also raise here if you want to hard-fail)
+        pass
+
+    # Use the exact chromedriver that matches the installed Chrome
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
     service = Service(chromedriver_path) if chromedriver_path else Service()
+
+    # Optional: small nits that help in CI
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+
+    # Helpful debug line (shows up in GitHub logs)
+    print(f"[driver] Using chrome_bin={options.binary_location!r} | chromedriver={chromedriver_path!r}")
+
     return webdriver.Chrome(service=service, options=options)
 
 
