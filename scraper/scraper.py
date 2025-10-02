@@ -50,20 +50,44 @@ def parse_comp_ids(env_val: Optional[str]) -> List[int]:
 
 def make_driver() -> webdriver.Chrome:
     """
-    Keep exactly the same Chrome/Selenium setup as your working test.
-    (Headless, minimal flags, and CHROMEDRIVER_PATH from the workflow.)
+    Launch exactly the Chrome that the workflow installed, with the matching Chromedriver.
+    Keep headless optional via FORCE_HEADLESS env.
     """
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1600,1200")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                         "AppleWebKit/537.36 (KHTML, like Gecko) "
-                         "Chrome/124.0.0.0 Safari/537.36")
-    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium import webdriver
+    import os
+
+    headless = (os.getenv("FORCE_HEADLESS", "true").lower() != "false")
+
+    opts = Options()
+    if headless:
+        opts.add_argument("--headless=new")    # modern headless
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--window-size=1600,1200")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--disable-software-rasterizer")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--disable-extensions")
+    # Make headless DOM closer to headed
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    # Iframes sometimes fail under strict process isolation in CI
+    opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
+
+    # Use the exact Chrome from setup-chrome
+    chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
+    if chrome_bin:
+        opts.binary_location = chrome_bin
+
+    # Use the exact chromedriver from setup-chrome
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
     service = Service(chromedriver_path) if chromedriver_path else Service()
-    return webdriver.Chrome(service=service, options=options)
+
+    drv = webdriver.Chrome(service=service, options=opts)
+    print(f"[driver] chrome_bin={getattr(opts, 'binary_location', None)} | chromedriver={chromedriver_path} | headless={headless}")
+    return drv
 
 
 def _find_in_any_frame(driver, by, value, timeout=15):

@@ -104,7 +104,7 @@ jobs:
         env:
           COMP_IDS: ${{ steps.load_ids.outputs.comp_ids }}
           ACTIVE_JSON_URL: ${{ steps.load_ids.outputs.active_json_url }}
-          FORCE_HEADLESS: "true"
+          FORCE_HEADLESS: "false"
         run: |
           nohup Xvfb :99 -screen 0 1280x1024x24 >/tmp/xvfb.log 2>&1 &
           export DISPLAY=:99
