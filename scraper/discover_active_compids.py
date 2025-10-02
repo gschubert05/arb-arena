@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.support.ui import WebDriverWait
@@ -17,21 +18,57 @@ from selenium.webdriver.support import expected_conditions as EC
 
 BASE_URL = "http://odds.aussportsbetting.com/betting?competitionid={}"
 
+# Module-level: side-channel for league names
+LEAGUES_BY_COMPID: Dict[str, str] = {}
+
+
 def make_driver(headful: bool = False) -> webdriver.Chrome:
+    """
+    Deterministic Chrome that matches setup-chrome outputs, plus
+    the small HTTP-origin allowances that fixed your main scraper.
+    """
+    # Clear proxy env so Chrome doesn't inherit any runner proxy
+    for k in ("http_proxy","https_proxy","HTTP_PROXY","HTTPS_PROXY",
+              "ALL_PROXY","all_proxy","NO_PROXY","no_proxy"):
+        os.environ.pop(k, None)
+
     opts = Options()
     if not headful:
-        # headless=new is best with recent Chromes
         opts.add_argument("--headless=new")
+
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1600,1200")
-    # A realistic UA can help if site gates content
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    opts.add_argument("--disable-extensions")
+    # Keep close to your working setup
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_argument("--disable-features=IsolateOrigins,site-per-process")
+    # Networking: direct & prefer IPv4
+    opts.add_argument("--proxy-server=direct://")
+    opts.add_argument("--proxy-bypass-list=*")
+    opts.add_argument("--disable-ipv6")
+    # Allow loading plain-HTTP origin in newer Chrome
+    opts.add_argument("--allow-running-insecure-content")
+    opts.add_argument("--unsafely-treat-insecure-origin-as-secure=http://odds.aussportsbetting.com")
+    # Realistic UA
     opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
                       "Chrome/124.0.0.0 Safari/537.36")
-    # Optional: slightly faster load strategy
-    # opts.page_load_strategy = "eager"
-    return webdriver.Chrome(options=opts)
+
+    # Wire the exact Chrome/Driver installed by setup-chrome
+    chrome_bin = os.environ.get("CHROME_BIN") or os.environ.get("GOOGLE_CHROME_SHIM")
+    if chrome_bin:
+        opts.binary_location = chrome_bin
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH") or os.environ.get("CHROMEWEBDRIVER")
+    service = Service(chromedriver_path) if chromedriver_path else Service()
+
+    drv = webdriver.Chrome(service=service, options=opts)
+    drv.set_page_load_timeout(45)
+    return drv
+
 
 def parse_range(range_str: str) -> List[int]:
     out: List[int] = []
@@ -48,10 +85,27 @@ def parse_range(range_str: str) -> List[int]:
             out.append(int(piece))
     return out
 
-# NEW: module-level side-channel for league names
-LEAGUES_BY_COMPID: Dict[str, str] = {}
 
-# add helper
+def ensure_dir(path: Optional[str]) -> None:
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+
+def save_html(dirpath: Optional[str], comp_id: int, html: str) -> None:
+    if not dirpath:
+        return
+    ensure_dir(dirpath)
+    with open(os.path.join(dirpath, f"comp_{comp_id}.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+
+
+def save_screenshot(driver: webdriver.Chrome, dirpath: Optional[str], comp_id: int) -> None:
+    if not dirpath:
+        return
+    ensure_dir(dirpath)
+    driver.save_screenshot(os.path.join(dirpath, f"comp_{comp_id}.png"))
+
+
 def extract_league_name(page_html: str) -> Optional[str]:
     """Read <td id="datapage-title-strip"><h1>…</h1></td> and strip trailing 'live odds'."""
     soup = BeautifulSoup(page_html, "html.parser")
@@ -64,25 +118,9 @@ def extract_league_name(page_html: str) -> Optional[str]:
     txt = h1.get_text(" ", strip=True)
     if not txt:
         return None
-    # remove trailing "live odds" (any case, allow stray punctuation/spaces before it)
     txt = re.sub(r"[\s–-]*live\s*odds\s*$", "", txt, flags=re.IGNORECASE)
     return txt.strip() or None
 
-
-def ensure_dir(path: Optional[str]) -> None:
-    if path:
-        os.makedirs(path, exist_ok=True)
-
-def save_html(dirpath: Optional[str], comp_id: int, html: str) -> None:
-    if not dirpath: return
-    ensure_dir(dirpath)
-    with open(os.path.join(dirpath, f"comp_{comp_id}.html"), "w", encoding="utf-8") as f:
-        f.write(html)
-
-def save_screenshot(driver: webdriver.Chrome, dirpath: Optional[str], comp_id: int) -> None:
-    if not dirpath: return
-    ensure_dir(dirpath)
-    driver.save_screenshot(os.path.join(dirpath, f"comp_{comp_id}.png"))
 
 def inspect_dom(page_html: str) -> Tuple[bool, str, Dict[str, int]]:
     """
@@ -97,13 +135,17 @@ def inspect_dom(page_html: str) -> Tuple[bool, str, Dict[str, int]]:
     # 1) direct odds cells
     tds = soup.find_all("td", id="more-market-odds")
     if len(tds) > 0:
-        return True, f"td#more-market-odds x{len(tds)}", {"td_more_market_odds": len(tds), "a_addSelection": 0, "market_header_tables": 0}
+        return True, f"td#more-market-odds x{len(tds)}", {
+            "td_more_market_odds": len(tds), "a_addSelection": 0, "market_header_tables": 0
+        }
 
     # 2) anchors calling addSelection
     anchors = soup.find_all("a", onclick=True)
     a_sel = sum(1 for a in anchors if "addSelection(" in (a.get("onclick") or ""))
     if a_sel > 0:
-        return True, f"<a onclick=addSelection> x{a_sel}", {"td_more_market_odds": 0, "a_addSelection": a_sel, "market_header_tables": 0}
+        return True, f"<a onclick=addSelection> x{a_sel}", {
+            "td_more_market_odds": 0, "a_addSelection": a_sel, "market_header_tables": 0
+        }
 
     # 3) tables that look like the odds listing (header has "Market %")
     tables = soup.find_all("tbody")
@@ -114,14 +156,38 @@ def inspect_dom(page_html: str) -> Tuple[bool, str, Dict[str, int]]:
             continue
         headers = [td.get_text(strip=True) for td in first_tr.find_all("td")]
         if any(h.lower() in ("market %", "market%") for h in headers):
-            # ensure there is at least one body row beyond the header
             rows = tb.find_all("tr", recursive=False)
             if len(rows) > 1:
                 header_hits += 1
     if header_hits > 0:
-        return True, f'table with "Market %" header x{header_hits}', {"td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": header_hits}
+        return True, f'table with "Market %" header x{header_hits}', {
+            "td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": header_hits
+        }
 
-    return False, "no odds markers found", {"td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": 0}
+    return False, "no odds markers found", {
+        "td_more_market_odds": 0, "a_addSelection": 0, "market_header_tables": 0
+    }
+
+
+def _load_with_retries(driver: webdriver.Chrome, url: str, wait_secs: int) -> None:
+    """
+    Small, robust loader for the betting page.
+    Retries a few times if navigation throws (e.g., transient ERR_CONNECTION_REFUSED).
+    """
+    last = None
+    for _ in range(3):
+        try:
+            driver.get(url)
+            WebDriverWait(driver, wait_secs).until(
+                EC.presence_of_all_elements_located((By.TAG_NAME, "table"))
+            )
+            return
+        except Exception as e:
+            last = e
+            time.sleep(0.8)
+    if last:
+        raise last
+
 
 def check_competition(
     driver: webdriver.Chrome,
@@ -136,43 +202,33 @@ def check_competition(
 ) -> Tuple[int, bool, str, Dict[str, int]]:
     url = BASE_URL.format(comp_id)
     try:
-        driver.get(url)
-        # Wait for at least one <table> (matches your old script)
-        try:
-            WebDriverWait(driver, wait_secs).until(
-                EC.presence_of_all_elements_located((By.TAG_NAME, "table"))
-            )
-        except TimeoutException:
-            # Save evidence
-            save_screenshot(driver, save_bad_screens_dir, comp_id)
-            html = driver.page_source
-            save_html(save_bad_html_dir, comp_id, html)
-            return comp_id, False, "timeout waiting for <table>", {}
+        _load_with_retries(driver, url, wait_secs)
 
-        # slight settle
         if extra_sleep > 0:
             time.sleep(extra_sleep)
 
         html = driver.page_source
         is_active, reason, counts = inspect_dom(html)
 
-        # somewhere inside check_competition(), right after you set `html = driver.page_source`
+        # Capture league name if present
         league = extract_league_name(html)
         if league:
             LEAGUES_BY_COMPID[str(comp_id)] = league
 
-
         # Save assets if requested
-        if save_all_html_dir: save_html(save_all_html_dir, comp_id, html)
-        if save_all_screens_dir: save_screenshot(driver, save_all_screens_dir, comp_id)
-        if (not is_active):
+        if save_all_html_dir:
+            save_html(save_all_html_dir, comp_id, html)
+        if save_all_screens_dir:
+            save_screenshot(driver, save_all_screens_dir, comp_id)
+        if not is_active:
             save_html(save_bad_html_dir, comp_id, html)
             save_screenshot(driver, save_bad_screens_dir, comp_id)
 
-        return comp_id, is_active, reason if not very_verbose else f"{reason} | counts={counts}", counts
+        return comp_id, is_active, (reason if not very_verbose else f"{reason} | counts={counts}"), counts
 
     except WebDriverException as e:
         return comp_id, False, f"webdriver error: {e.__class__.__name__}", {}
+
 
 def main():
     ap = argparse.ArgumentParser(description="Discover active competition IDs via Selenium.")
@@ -233,7 +289,6 @@ def main():
         driver.quit()
 
     active.sort()
-    # Write JSON (same shape your workflow expects)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump({
@@ -241,10 +296,9 @@ def main():
             "range": args.range or (f"{args.single}" if args.single is not None else "1-150"),
             "skip": sorted(list(skip)),
             "active_comp_ids": active,
-            "leagues_by_compid": LEAGUES_BY_COMPID,   # <-- NEW
+            "leagues_by_compid": LEAGUES_BY_COMPID,
             "debug_counts": meta_per_id,
         }, f, ensure_ascii=False, indent=2)
-
 
     # Print compact CSV for CI piping
     print(",".join(str(x) for x in active))
@@ -252,6 +306,7 @@ def main():
     dur = time.time() - start
     if args.verbose:
         print(f"Discovered {len(active)} active IDs in {dur:.1f}s", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()

@@ -35,17 +35,22 @@ jobs:
           install-dependencies: true
           install-chromedriver: true
 
-      - name: Export CHROME_BIN
-        run: echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+      - name: Export Chrome paths
+        run: |
+          echo "CHROME_BIN=${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PATH=${{ steps.setup-chrome.outputs.chromedriver-path }}" >> $GITHUB_ENV
 
       - name: Run discoverer (headless)
+        env:
+          # Keep it headless; we don't need Xvfb for this job
+          FORCE_HEADLESS: "true"
         run: |
           mkdir -p server/data
           python scraper/discover_active_compids.py \
             --range "1-150,450,650" --skip "72,73,108,114" \
             --out server/data/active_comp_ids.json -v
 
-      # ✅ Publish ONLY active_comp_ids.json via a separate worktree (no branch switching in-place)
+      # Publish ONLY active_comp_ids.json via a separate worktree (no branch switching in-place)
       - name: Publish active_comp_ids.json to data branch
         run: |
           set -e
@@ -54,12 +59,10 @@ jobs:
 
           git fetch origin data || true
 
-          # Create/update a detached worktree rooted on origin/data (or new branch if missing)
           WT_DIR="$(mktemp -d)"
           if git rev-parse --verify origin/data >/dev/null 2>&1; then
             git worktree add -B data "$WT_DIR" origin/data
           else
-            # First-time creation of data branch from current HEAD
             git worktree add -B data "$WT_DIR"
           fi
 
@@ -71,6 +74,5 @@ jobs:
           git commit -m "discover: active comp IDs $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No changes"
           git push origin data
 
-          # Clean up the worktree
           cd -
           git worktree remove "$WT_DIR" --force
