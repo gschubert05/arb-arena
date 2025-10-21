@@ -431,48 +431,109 @@ const Calc = (() => {
   function roundTo(x, step) {
     return Math.round(x/step)*step;
   }
-
-  // Try totals from maxStake DOWNWARD by step, looking for nice rounded split
+  
+  // Try totals from maxStake down to (maxStake - 100) in $1 steps.
+  // For each total, round stakes to `step` but also allow $1 micro-tweaks
+  // around the rounded split to maximize *minimum profit*.
   function searchRounded(oA, oB, maxStake, step) {
-    let best = null;
+    const maxDown = 100;                       // search a $100 window
+    const start = Math.max(0, Math.floor(maxStake));
+    const stop  = Math.max(0, start - maxDown);
 
-    for (let total = Math.floor(maxStake/step)*step; total >= step; total -= step) {
-      const base = equalize(total, oA, oB);
-      let rA = roundTo(base.sA, step);
-      let rB = roundTo(base.sB, step);
+    // helper: round to nearest step (5/10/1)
+    const roundTo = (x, s) => Math.round(x / s) * s;
 
-      // keep within total by shaving the larger side if needed
-      while (rA + rB > total && (rA > 0 || rB > 0)) {
-        if (rA >= rB && rA >= step) rA -= step;
-        else if (rB >= step) rB -= step;
-        else break;
+    // equal-payout baseline (unrounded)
+    const equalize = (total) => {
+      const T = total / (1 / oA + 1 / oB);     // target payout if equalized
+      return { sA: T / oA, sB: T / oB, T };
+    };
+
+    // Evaluate a (rA, rB) candidate against a given total
+    function scoreCandidate(total, rA, rB) {
+      if (rA < 0 || rB < 0) return null;
+      if (rA + rB > total) return null;        // respect total cap
+      const payoutA   = rA * oA;
+      const payoutB   = rB * oB;
+      const used      = rA + rB;
+      const minPayout = Math.min(payoutA, payoutB);
+      const profit    = minPayout - used;
+      const diff      = Math.abs(payoutA - payoutB);
+
+      // Prioritize higher min profit; then higher used stake; then tighter payouts
+      const score = profit * 1e9 + used * 1e3 - diff;
+      return { total, rA, rB, payoutA, payoutB, used, minPayout, profit, score, diff };
+    }
+
+    // Around a rounded split, try $1 redistributions up to ±step to improve min profit
+    function localSearch(total, sAeq, sBeq) {
+      const baseA = roundTo(sAeq, step);
+      const baseB = roundTo(sBeq, step);
+
+      // Ensure we don't exceed total
+      let rA0 = baseA;
+      let rB0 = Math.min(baseB, total - rA0);
+      if (rA0 + rB0 > total) {
+        // shave the larger side to fit
+        if (rA0 >= rB0) rA0 = total - rB0;
+        else            rB0 = total - rA0;
+      }
+      if (rA0 < 0) rA0 = 0;
+      if (rB0 < 0) rB0 = 0;
+
+      let best = scoreCandidate(total, rA0, rB0);
+
+      // Micro-adjust by $1 within ±step dollars, while respecting total
+      const radius = Math.max(1, step); // we’ll still search every $1
+      for (let d = -radius; d <= radius; d++) {
+        const rA = Math.max(0, Math.min(total, rA0 + d));
+        const rB = Math.max(0, total - rA); // use the remaining
+        const cand = scoreCandidate(total, rA, rB);
+        if (cand && (!best || cand.score > best.score)) best = cand;
       }
 
-      if (rA < 0) rA = 0;
-      if (rB < 0) rB = 0;
+      // Also try floor/ceil combos (to step), then micro-tweak
+      const floors = [Math.floor(sAeq / step) * step, Math.ceil(sAeq / step) * step]
+        .filter((v, i, a) => a.indexOf(v) === i);
+      const floorsB = [Math.floor(sBeq / step) * step, Math.ceil(sBeq / step) * step]
+        .filter((v, i, a) => a.indexOf(v) === i);
 
-      const payoutA = rA * oA;
-      const payoutB = rB * oB;
-      const used = rA + rB;
-      const minPayout = Math.min(payoutA, payoutB);
-      const profit = minPayout - used;
+      for (const a0 of floors) {
+        for (const b0 of floorsB) {
+          let rA = a0, rB = Math.min(b0, total - rA);
+          if (rA + rB > total) {
+            if (rA >= rB) rA = total - rB;
+            else          rB = total - rA;
+          }
+          let locBest = scoreCandidate(total, rA, rB);
+          for (let d = -radius; d <= radius; d++) {
+            const rA2 = Math.max(0, Math.min(total, rA + d));
+            const rB2 = Math.max(0, total - rA2);
+            const cand2 = scoreCandidate(total, rA2, rB2);
+            if (cand2 && (!locBest || cand2.score > locBest.score)) locBest = cand2;
+          }
+          if (locBest && (!best || locBest.score > best.score)) best = locBest;
+        }
+      }
 
-      // score: prefer non-negative profit, higher profit, then higher used stake (closer to max), then closer payouts
-      const diff = Math.abs(payoutA - payoutB);
-      const score = (profit >= 0 ? 1e9 : 0) + profit*1e6 + used - diff/1000;
+      return best;
+    }
 
-      const candidate = { total, rA, rB, payoutA, payoutB, minPayout, profit, score };
-      if (!best || candidate.score > best.score) best = candidate;
+    let bestOverall = null;
 
-      // short-circuit: first total that gives non-negative profit & both sides rounded is often good
-      if (profit >= 0 && Math.abs(payoutA - payoutB) <= step * Math.max(oA, oB)) {
-        // good enough
-        break;
+    for (let total = start; total >= stop; total -= 1) {
+      if (total <= 0) break;
+      const { sA, sB } = equalize(total);
+      const cand = localSearch(total, sA, sB);
+      if (cand && (!bestOverall || cand.score > bestOverall.score)) {
+        bestOverall = cand;
       }
     }
 
-    return best;
+    // Fallback if nothing found
+    return bestOverall || { total: 0, rA: 0, rB: 0, payoutA: 0, payoutB: 0, minPayout: 0, profit: 0, score: -Infinity, diff: Infinity };
   }
+
 
   let ctx = { oA:1.9, oB:1.9, aName:'', bName:'', aLogo:'', bLogo:'' };
 
@@ -480,13 +541,14 @@ const Calc = (() => {
     const maxStake = clamp(Number(els.maxStake.value)||1000, 0, 1e7);
     const step = Number(els.round.value) || 10;
 
-    const res = searchRounded(ctx.oA, ctx.oB, maxStake, step) || { rA:0, rB:0, total:0, payoutA:0, payoutB:0, minPayout:0, profit:0 };
+    const res = searchRounded(ctx.oA, ctx.oB, maxStake, step);
     els.Astake.value = Math.max(0, Math.round(res.rA));
     els.Bstake.value = Math.max(0, Math.round(res.rB));
 
     updateOutputs();
-    els.hint.textContent = `Searched down from $${maxStake} by $${step} to find round splits.`;
+    els.hint.textContent = `Searched a $${Math.min(100, Math.floor(maxStake))} window from $${Math.floor(maxStake)} down in $1 totals; stakes rounded to $${step} with $1 micro-adjustments.`;
   }
+
 
   function manualRecalc() {
     const sA = Math.max(0, Number(els.Astake.value)||0);
