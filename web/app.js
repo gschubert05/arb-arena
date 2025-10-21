@@ -269,15 +269,16 @@ const Calc = (() => {
       transform: 'translate(-50%, -50%)',
       width: '95vw',
       maxWidth: '680px',
-      background: 'var(--tw-bg-opacity,#fff)',
+      background: 'var(--tw-bg-opacity,#fff)',   // keep a surface behind the inner blocks
       borderRadius: '20px',
-      overflow: 'hidden',          // <— clips child backgrounds to the rounded edge
-      background: 'transparent',   // container is transparent…
+      overflow: 'hidden',
+      padding: '12px',                            // <— this creates the breathing room
       boxShadow: '0 10px 40px rgba(0,0,0,.25)',
       border: '1px solid rgba(100,116,139,.3)',
-      zIndex: '2147483647',   // on top of everything
+      zIndex: '2147483647',
       display: 'none',
     });
+
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
 
@@ -366,7 +367,7 @@ const Calc = (() => {
             <div class="flex flex-wrap gap-2">
               <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
               <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
-              <span class="pill">Profit (<span id="calcRoi" class="tabular-nums"></span>): <b id="calcProfit" class="tabular-nums"></b></span>
+              <span class="pill">Profit(<span id="calcRoi" class="tabular-nums"></span>): <b id="calcProfit" class="tabular-nums"></b></span>
             </div>
             <div class="calc-meta" id="calcHint"></div>
           </div>
@@ -564,7 +565,7 @@ const Calc = (() => {
     els.Bpayout.textContent   = fmtMoney(payoutB);
     els.minPayout.textContent = fmtMoney(minPayout);
     els.profit.textContent    = fmtMoney(profit);
-    els.Roi.textContent       = `${roiPct.toFixed(2)}%`;
+    els.Roi.textContent       = `${roiPct.toFixed(2)}%`; // renders as Profit(5.05%): $50.00
   }
 
   function updateOutputs() {
