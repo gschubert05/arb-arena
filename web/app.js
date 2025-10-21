@@ -222,29 +222,45 @@ const Calc = (() => {
   function ensureModal() {
     if (modal) return;
 
-    // Backdrop
+    // Backdrop (inline styles to beat any CSS)
     overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-black/40 z-[9998] hidden';
-    overlay.style.display = 'none'; // hard fallback
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      left: '0', top: '0', right: '0', bottom: '0',
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: '2147483646',   // just below modal
+      display: 'none',
+    });
     overlay.addEventListener('click', close);
 
-    // Modal container
+    // Modal (centered, highest z-index)
     modal = document.createElement('div');
-    // super high z so nothing overlaps; centered horizontally; near top
-    modal.className = 'fixed z-[9999] inset-x-0 top-10 mx-auto w-[min(680px,95vw)] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hidden';
-    modal.style.display = 'none'; // hard fallback
+    Object.assign(modal.style, {
+      position: 'fixed',
+      left: '50%', top: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '95vw',
+      maxWidth: '680px',
+      background: 'var(--tw-bg-opacity,#fff)',
+      borderRadius: '16px',
+      boxShadow: '0 10px 40px rgba(0,0,0,.25)',
+      border: '1px solid rgba(100,116,139,.3)',
+      zIndex: '2147483647',   // on top of everything
+      display: 'none',
+    });
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
-        <div class="text-sm text-slate-500 dark:text-slate-300" id="calcTitle">Calculator</div>
+      <div class="px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
+        <div class="text-sm text-slate-600 dark:text-slate-300" id="calcTitle">Calculator</div>
         <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
             <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
           </svg>
         </button>
       </div>
-      <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-        <!-- left -->
+      <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 bg-white dark:bg-slate-900 rounded-b-2xl">
         <div class="space-y-3">
           <div class="text-xs uppercase tracking-wide text-slate-500">Side A</div>
           <div class="flex items-center gap-2">
@@ -252,13 +268,15 @@ const Calc = (() => {
             <div class="font-medium" id="calcAname"></div>
           </div>
           <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
-          <div class="text-sm">Stake:
-            <input id="calcAstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+          <div class="text-sm">
+            Stake:
+            <input id="calcAstake" type="number" step="1" min="0"
+                   class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
             <button id="copyA" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
           </div>
           <div class="text-xs text-slate-500">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
         </div>
-        <!-- right -->
+
         <div class="space-y-3">
           <div class="text-xs uppercase tracking-wide text-slate-500">Side B</div>
           <div class="flex items-center gap-2">
@@ -266,8 +284,10 @@ const Calc = (() => {
             <div class="font-medium" id="calcBname"></div>
           </div>
           <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
-          <div class="text-sm">Stake:
-            <input id="calcBstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+          <div class="text-sm">
+            Stake:
+            <input id="calcBstake" type="number" step="1" min="0"
+                   class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
             <button id="copyB" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
           </div>
           <div class="text-xs text-slate-500">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
@@ -276,11 +296,13 @@ const Calc = (() => {
         <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <label class="block text-xs text-slate-500 mb-1">Max stake</label>
-            <input id="calcMaxStake" type="number" step="10" min="0" value="1000" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
+                   class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
           </div>
           <div>
             <label class="block text-xs text-slate-500 mb-1">Rounding</label>
-            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <select id="calcRound"
+                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
               <option value="10">Nearest $10</option>
               <option value="5">Nearest $5</option>
             </select>
@@ -302,6 +324,7 @@ const Calc = (() => {
       </div>
     `;
 
+    // append as last children of body (portal)
     document.body.appendChild(overlay);
     document.body.appendChild(modal);
 
@@ -333,9 +356,7 @@ const Calc = (() => {
 
     els.close.addEventListener('click', close);
     els.close2.addEventListener('click', close);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     els.copyA.addEventListener('click', () => navigator.clipboard.writeText(String(els.Astake.value || '')));
     els.copyB.addEventListener('click', () => navigator.clipboard.writeText(String(els.Bstake.value || '')));
@@ -348,19 +369,17 @@ const Calc = (() => {
   }
 
   function show() {
-    // lock background scroll
-    document.documentElement.classList.add('overflow-hidden');
-
-    overlay.classList.remove('hidden');  modal.classList.remove('hidden');
-    overlay.style.display = 'block';     modal.style.display = 'block'; // hard fallback
+    document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    overlay.style.display = 'block';
+    modal.style.display = 'block';
   }
 
   function close() {
-    document.documentElement.classList.remove('overflow-hidden');
-
-    overlay.classList.add('hidden');     modal.classList.add('hidden');
-    overlay.style.display = 'none';      modal.style.display = 'none'; // hard fallback
+    document.documentElement.style.overflow = '';
+    overlay.style.display = 'none';
+    modal.style.display = 'none';
   }
+
 
   // core math
   function equalize(total, oA, oB) {
