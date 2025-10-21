@@ -102,6 +102,15 @@
   document.head.appendChild(style);
 })();
 
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Extra space above the pills divider */
+    .calc-summary { margin-top: 18px; padding-top: 14px; }
+  `;
+  document.head.appendChild(style);
+})();
+
 // --- App state ---
 const state = {
   sortBy: 'roi',
@@ -398,16 +407,18 @@ const Calc = (() => {
           </div>
         </div>
 
-        <!-- Controls (no buttons) -->
-        <div class="calc-controls grid grid-cols-1 md:grid-cols-2 gap-3 items-end mt-6 mb-3">
-          <div>
-            <label class="block text-xs text-slate-500 mb-1 mt-1">Max stake</label>
+        <!-- Controls (stacked) -->
+        <div class="calc-controls mt-6">
+          <div class="mb-3">
+            <label class="block text-xs text-slate-500 mb-1">Max stake</label>
             <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
           </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1 mt-1">Rounding</label>
-            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+
+          <div class="mb-4">
+            <label class="block text-xs text-slate-500 mb-1">Rounding</label>
+            <select id="calcRound"
+                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
               <option value="10">Nearest $10</option>
               <option value="5">Nearest $5</option>
               <option value="1">Nearest $1</option>
