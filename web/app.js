@@ -337,10 +337,10 @@ const Calc = (() => {
           </div>
           <div>
             <label class="block text-xs text-slate-500 mb-1">Rounding</label>
-            <select id="calcRound"
-                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
               <option value="10">Nearest $10</option>
               <option value="5">Nearest $5</option>
+              <option value="1">Nearest $1</option>
             </select>
           </div>
           <div class="flex gap-2">
@@ -407,13 +407,13 @@ const Calc = (() => {
   }
 
   function show() {
-    document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    //document.documentElement.style.overflow = 'hidden'; // lock background scroll
     overlay.style.display = 'block';
     modal.style.display = 'block';
   }
 
   function close() {
-    document.documentElement.style.overflow = '';
+    //document.documentElement.style.overflow = '';
     overlay.style.display = 'none';
     modal.style.display = 'none';
   }
@@ -431,7 +431,7 @@ const Calc = (() => {
   function roundTo(x, step) {
     return Math.round(x/step)*step;
   }
-  
+
   // Try totals from maxStake down to (maxStake - 100) in $1 steps.
   // For each total, round stakes to `step` but also allow $1 micro-tweaks
   // around the rounded split to maximize *minimum profit*.
@@ -482,15 +482,6 @@ const Calc = (() => {
       if (rB0 < 0) rB0 = 0;
 
       let best = scoreCandidate(total, rA0, rB0);
-
-      // Micro-adjust by $1 within ±step dollars, while respecting total
-      const radius = Math.max(1, step); // we’ll still search every $1
-      for (let d = -radius; d <= radius; d++) {
-        const rA = Math.max(0, Math.min(total, rA0 + d));
-        const rB = Math.max(0, total - rA); // use the remaining
-        const cand = scoreCandidate(total, rA, rB);
-        if (cand && (!best || cand.score > best.score)) best = cand;
-      }
 
       // Also try floor/ceil combos (to step), then micro-tweak
       const floors = [Math.floor(sAeq / step) * step, Math.ceil(sAeq / step) * step]
