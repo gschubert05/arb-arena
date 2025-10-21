@@ -271,6 +271,8 @@ const Calc = (() => {
       maxWidth: '680px',
       background: 'var(--tw-bg-opacity,#fff)',
       borderRadius: '20px',
+      overflow: 'hidden',          // <— clips child backgrounds to the rounded edge
+      background: 'transparent',   // container is transparent…
       boxShadow: '0 10px 40px rgba(0,0,0,.25)',
       border: '1px solid rgba(100,116,139,.3)',
       zIndex: '2147483647',   // on top of everything
@@ -280,15 +282,16 @@ const Calc = (() => {
     modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="px-6 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
-        <div class="text-base font-semibold pl-1 text-slate-800 dark:text-slate-100" id="calcTitle">Calculator</div>
+      <div class="px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+        <div class="text-base font-semibold text-slate-800 dark:text-slate-100" id="calcTitle">Calculator</div>
         <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
             <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
           </svg>
         </button>
       </div>
-      <div class="p-5 bg-white dark:bg-slate-900 rounded-b-2xl">
+
+      <div class="px-6 py-5 bg-white dark:bg-slate-900">
         <!-- Side A -->
         <div class="calc-card">
           <div class="calc-row">
@@ -297,6 +300,9 @@ const Calc = (() => {
               <div class="name" id="calcAname">Side A</div>
             </div>
             <div class="calc-odds">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
+          </div>
+          <div class="calc-row" style="margin-top:8px">
+            <div class="calc-meta">Bet: <span id="calcAbet"></span></div>
           </div>
           <div class="calc-row" style="margin-top:10px">
             <div class="calc-meta">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
@@ -316,6 +322,9 @@ const Calc = (() => {
               <div class="name" id="calcBname">Side B</div>
             </div>
             <div class="calc-odds">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
+          </div>
+          <div class="calc-row" style="margin-top:8px">
+            <div class="calc-meta">Bet: <span id="calcBbet"></span></div>
           </div>
           <div class="calc-row" style="margin-top:10px">
             <div class="calc-meta">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
@@ -343,7 +352,8 @@ const Calc = (() => {
             </select>
           </div>
           <div class="flex gap-2">
-            <button id="calcRecalc" class="w-full px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white">
+            <button id="calcRecalc"
+              class="w-full px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
               Recalculate
             </button>
             <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
@@ -361,6 +371,7 @@ const Calc = (() => {
         </div>
       </div>
     `;
+
 
 
     // append as last children of body (portal)
@@ -391,6 +402,8 @@ const Calc = (() => {
       minPayout: modal.querySelector('#calcMinPayout'),
       profit: modal.querySelector('#calcProfit'),
       hint: modal.querySelector('#calcHint'),
+      Abet: modal.querySelector('#calcAbet'),
+      Bbet: modal.querySelector('#calcBbet'),
     };
 
     els.close.addEventListener('click', close);
@@ -553,7 +566,7 @@ const Calc = (() => {
     manualRecalc();
   }
 
-  function openCalc({ aName, bName, aOdds, bOdds, aLogo, bLogo, title, maxStake=1000 }) {
+  function openCalc({ aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet = '', bBet = '', maxStake = 1000 }) {
     ensureModal();
     ctx = { oA: Number(aOdds), oB: Number(bOdds), aName, bName, aLogo, bLogo };
 
@@ -564,6 +577,8 @@ const Calc = (() => {
     els.Bodds.textContent = (Number(bOdds)||0).toFixed(2);
     els.Alogo.src = aLogo || '/logos/placeholder.jpeg';
     els.Blogo.src = bLogo || '/logos/placeholder.jpeg';
+    els.Abet.textContent = aBet;
+    els.Bbet.textContent = bBet;
     els.maxStake.value = maxStake;
 
     autoSplit();
@@ -850,6 +865,9 @@ async function fetchData() {
         const bLogo = logoFor(bName);
         const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
 
+        const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
+        const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
+
         calcCell = `
           <button class="calc-btn p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
             title="Open calculator"
@@ -859,12 +877,15 @@ async function fetchData() {
             data-bodds="${bOdds}"
             data-alogo="${aLogo}"
             data-blogo="${bLogo}"
-            data-title="${title}">
+            data-title="${title}"
+            data-abet="${headerL}"
+            data-bbet="${headerR}">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
               <path d="M8 7h8M7 11h3M7 15h3M7 19h3M14 11h3M14 15h3M14 19h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </button>`;
+
       }
     }
     // ---------------------------------------------------
@@ -972,6 +993,8 @@ els.tbody.addEventListener('click', (e) => {
     aLogo: btn.getAttribute('data-alogo') || '/logos/placeholder.jpeg',
     bLogo: btn.getAttribute('data-blogo') || '/logos/placeholder.jpeg',
     title: btn.getAttribute('data-title') || 'Calculator',
+    aBet: btn.getAttribute('data-abet') || '',
+    bBet: btn.getAttribute('data-bbet') || '',
     maxStake: 1000
   };
   Calc.openCalc(data);
