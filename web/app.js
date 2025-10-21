@@ -708,9 +708,42 @@ async function fetchData() {
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
-
     const leagueCell = it.league || '—';
-    let bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
+    const bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
+
+    // ---- NEW: precompute calculator cell (no IIFE) ----
+    let calcCell = '<span class="text-slate-300">—</span>';
+    if (it.book_table && it.book_table.best) {
+      const left  = it.book_table.best.left  || {};
+      const right = it.book_table.best.right || {};
+      const aName = cleanAgencyName(left.agency || '');
+      const bName = cleanAgencyName(right.agency || '');
+      const aOdds = Number(left.odds);
+      const bOdds = Number(right.odds);
+
+      if (aName && bName && aOdds > 0 && bOdds > 0) {
+        const aLogo = logoFor(aName);
+        const bLogo = logoFor(bName);
+        const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
+
+        calcCell = `
+          <button class="calc-btn p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Open calculator"
+            data-aname="${aName}"
+            data-bname="${bName}"
+            data-aodds="${aOdds}"
+            data-bodds="${bOdds}"
+            data-alogo="${aLogo}"
+            data-blogo="${bLogo}"
+            data-title="${title}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+              <path d="M8 7h8M7 11h3M7 15h3M7 19h3M14 11h3M14 15h3M14 19h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>`;
+      }
+    }
+    // ---------------------------------------------------
 
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
@@ -726,47 +759,24 @@ async function fetchData() {
         </div>
       </td>
       <td class="px-4 py-3">${bookiesCell}</td>
-      <td class="px-2 py-3 text-center">
-        ${(() => {
-          const left  = it.book_table?.best?.left  || {};
-          const right = it.book_table?.best?.right || {};
-          const aName = cleanAgencyName(left.agency || '');
-          const bName = cleanAgencyName(right.agency || '');
-          const aOdds = left.odds, bOdds = right.odds;
-          if (!aName || !bName || !aOdds || !bOdds) return '<span class="text-slate-300">—</span>';
-          const aLogo = logoFor(aName);
-          const bLogo = logoFor(bName);
-          const title = `${it.game || ''} — ${it.market || ''}`;
-          return `
-            <button class="calc-btn p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-              title="Open calculator"
-              data-aname="${aName}"
-              data-bname="${bName}"
-              data-aodds="${Number(aOdds)}"
-              data-bodds="${Number(bOdds)}"
-              data-alogo="${aLogo}"
-              data-blogo="${bLogo}"
-              data-title="${title.replace(/"/g,'&quot;')}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
-                <path d="M8 7h8M7 11h3M7 15h3M7 19h3M14 11h3M14 15h3M14 19h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>`;
-        })()}
-      </td>
+      <td class="px-2 py-3 text-center">${calcCell}</td>
     `;
 
-
-    frag.appendChild(tr);
-
+    // details row stays the same, just ensure colSpan=9
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 9; // League col added
+    tdDetails.colSpan = 9;
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
-    frag.appendChild(trDetails);
 
+    // append both
+    const fragRow = document.createDocumentFragment();
+    fragRow.appendChild(tr);
+    fragRow.appendChild(trDetails);
+    frag.appendChild(fragRow);
+
+    // toggle on row click
     tr.addEventListener('click', (e) => {
       if (isInteractive(e.target)) return;
       const isHidden = trDetails.classList.contains('hidden');
