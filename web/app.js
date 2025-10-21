@@ -211,6 +211,244 @@ function renderFullBookTable(it) {
     </div>`;
 }
 
+// === Pop-up Calculator =======================================================
+// Creates a singleton modal and exposes openCalc(data)
+
+const Calc = (() => {
+  let modal, overlay, els = {};
+  const fmtMoney = v => '$' + (Number(v)||0).toFixed(2);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+  function ensureModal() {
+    if (modal) return;
+
+    overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/40 z-40 hidden';
+    overlay.addEventListener('click', close);
+
+    modal = document.createElement('div');
+    modal.className = 'fixed z-50 inset-x-0 top-10 mx-auto w-[min(680px,95vw)] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hidden';
+    modal.innerHTML = `
+      <div class="px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
+        <div class="text-sm text-slate-500 dark:text-slate-300" id="calcTitle">Calculator</div>
+        <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="space-y-3">
+          <div class="text-xs uppercase tracking-wide text-slate-500">Side A</div>
+          <div class="flex items-center gap-2">
+            <img id="calcAlogo" class="w-6 h-6 rounded" src="/logos/placeholder.jpeg" alt="">
+            <div class="font-medium" id="calcAname"></div>
+          </div>
+          <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
+          <div class="text-sm">Stake: <input id="calcAstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"> <button id="copyA" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button></div>
+          <div class="text-xs text-slate-500">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="text-xs uppercase tracking-wide text-slate-500">Side B</div>
+          <div class="flex items-center gap-2">
+            <img id="calcBlogo" class="w-6 h-6 rounded" src="/logos/placeholder.jpeg" alt="">
+            <div class="font-medium" id="calcBname"></div>
+          </div>
+          <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
+          <div class="text-sm">Stake: <input id="calcBstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"> <button id="copyB" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button></div>
+          <div class="text-xs text-slate-500">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
+        </div>
+
+        <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Max stake</label>
+            <input id="calcMaxStake" type="number" step="10" min="0" value="1000" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Rounding</label>
+            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+              <option value="10">Nearest $10</option>
+              <option value="5">Nearest $5</option>
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button id="calcRecalc" class="w-full px-3 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white">Recalculate</button>
+            <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
+          </div>
+        </div>
+
+        <div class="md:col-span-2 flex items-center justify-between mt-2">
+          <div class="text-sm">
+            Total stake: <span id="calcTotal" class="tabular-nums"></span> &nbsp;·&nbsp;
+            Min payout: <span id="calcMinPayout" class="tabular-nums"></span> &nbsp;·&nbsp;
+            Profit: <span id="calcProfit" class="tabular-nums font-semibold"></span>
+          </div>
+          <div class="text-xs text-slate-500" id="calcHint"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    // wire elements
+    els = {
+      title: modal.querySelector('#calcTitle'),
+      close: modal.querySelector('#calcClose'),
+      close2: modal.querySelector('#calcClose2'),
+      recalc: modal.querySelector('#calcRecalc'),
+      maxStake: modal.querySelector('#calcMaxStake'),
+      round: modal.querySelector('#calcRound'),
+      Aname: modal.querySelector('#calcAname'),
+      Aodds: modal.querySelector('#calcAodds'),
+      Alogo: modal.querySelector('#calcAlogo'),
+      Astake: modal.querySelector('#calcAstake'),
+      Apayout: modal.querySelector('#calcApayout'),
+      copyA: modal.querySelector('#copyA'),
+      Bname: modal.querySelector('#calcBname'),
+      Bodds: modal.querySelector('#calcBodds'),
+      Blogo: modal.querySelector('#calcBlogo'),
+      Bstake: modal.querySelector('#calcBstake'),
+      Bpayout: modal.querySelector('#calcBpayout'),
+      copyB: modal.querySelector('#copyB'),
+      total: modal.querySelector('#calcTotal'),
+      minPayout: modal.querySelector('#calcMinPayout'),
+      profit: modal.querySelector('#calcProfit'),
+      hint: modal.querySelector('#calcHint'),
+    };
+
+    els.close.addEventListener('click', close);
+    els.close2.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => { if (!modal.classList.contains('hidden') && e.key === 'Escape') close(); });
+
+    els.copyA.addEventListener('click', () => navigator.clipboard.writeText(String(els.Astake.value || '')));
+    els.copyB.addEventListener('click', () => navigator.clipboard.writeText(String(els.Bstake.value || '')));
+
+    els.recalc.addEventListener('click', () => autoSplit());
+    els.maxStake.addEventListener('change', () => autoSplit());
+    els.round.addEventListener('change', () => autoSplit());
+    els.Astake.addEventListener('input', manualRecalc);
+    els.Bstake.addEventListener('input', manualRecalc);
+  }
+
+  function close() {
+    modal.classList.add('hidden');
+    overlay.classList.add('hidden');
+  }
+  function show() {
+    overlay.classList.remove('hidden');
+    modal.classList.remove('hidden');
+  }
+
+  // core math
+  function equalize(total, oA, oB) {
+    // equal-payout baseline (unrounded)
+    const T = total / (1/oA + 1/oB);       // target payout
+    const sA = T / oA;
+    const sB = T / oB;
+    return { sA, sB, T };
+  }
+
+  function roundTo(x, step) {
+    return Math.round(x/step)*step;
+  }
+
+  // Try totals from maxStake DOWNWARD by step, looking for nice rounded split
+  function searchRounded(oA, oB, maxStake, step) {
+    let best = null;
+
+    for (let total = Math.floor(maxStake/step)*step; total >= step; total -= step) {
+      const base = equalize(total, oA, oB);
+      let rA = roundTo(base.sA, step);
+      let rB = roundTo(base.sB, step);
+
+      // keep within total by shaving the larger side if needed
+      while (rA + rB > total && (rA > 0 || rB > 0)) {
+        if (rA >= rB && rA >= step) rA -= step;
+        else if (rB >= step) rB -= step;
+        else break;
+      }
+
+      if (rA < 0) rA = 0;
+      if (rB < 0) rB = 0;
+
+      const payoutA = rA * oA;
+      const payoutB = rB * oB;
+      const used = rA + rB;
+      const minPayout = Math.min(payoutA, payoutB);
+      const profit = minPayout - used;
+
+      // score: prefer non-negative profit, higher profit, then higher used stake (closer to max), then closer payouts
+      const diff = Math.abs(payoutA - payoutB);
+      const score = (profit >= 0 ? 1e9 : 0) + profit*1e6 + used - diff/1000;
+
+      const candidate = { total, rA, rB, payoutA, payoutB, minPayout, profit, score };
+      if (!best || candidate.score > best.score) best = candidate;
+
+      // short-circuit: first total that gives non-negative profit & both sides rounded is often good
+      if (profit >= 0 && Math.abs(payoutA - payoutB) <= step * Math.max(oA, oB)) {
+        // good enough
+        break;
+      }
+    }
+
+    return best;
+  }
+
+  let ctx = { oA:1.9, oB:1.9, aName:'', bName:'', aLogo:'', bLogo:'' };
+
+  function autoSplit() {
+    const maxStake = clamp(Number(els.maxStake.value)||1000, 0, 1e7);
+    const step = Number(els.round.value) || 10;
+
+    const res = searchRounded(ctx.oA, ctx.oB, maxStake, step) || { rA:0, rB:0, total:0, payoutA:0, payoutB:0, minPayout:0, profit:0 };
+    els.Astake.value = Math.max(0, Math.round(res.rA));
+    els.Bstake.value = Math.max(0, Math.round(res.rB));
+
+    updateOutputs();
+    els.hint.textContent = `Searched down from $${maxStake} by $${step} to find round splits.`;
+  }
+
+  function manualRecalc() {
+    const sA = Math.max(0, Number(els.Astake.value)||0);
+    const sB = Math.max(0, Number(els.Bstake.value)||0);
+    const payoutA = sA * ctx.oA;
+    const payoutB = sB * ctx.oB;
+    const total = sA + sB;
+    const minPayout = Math.min(payoutA, payoutB);
+    const profit = minPayout - total;
+
+    els.total.textContent = fmtMoney(total);
+    els.Apayout.textContent = fmtMoney(payoutA);
+    els.Bpayout.textContent = fmtMoney(payoutB);
+    els.minPayout.textContent = fmtMoney(minPayout);
+    els.profit.textContent = fmtMoney(profit);
+  }
+
+  function updateOutputs() {
+    // recompute based on entered stakes
+    manualRecalc();
+  }
+
+  function openCalc({ aName, bName, aOdds, bOdds, aLogo, bLogo, title, maxStake=1000 }) {
+    ensureModal();
+    ctx = { oA: Number(aOdds), oB: Number(bOdds), aName, bName, aLogo, bLogo };
+
+    els.title.textContent = title || 'Calculator';
+    els.Aname.textContent = aName || 'Side A';
+    els.Bname.textContent = bName || 'Side B';
+    els.Aodds.textContent = (Number(aOdds)||0).toFixed(2);
+    els.Bodds.textContent = (Number(bOdds)||0).toFixed(2);
+    els.Alogo.src = aLogo || '/logos/placeholder.jpeg';
+    els.Blogo.src = bLogo || '/logos/placeholder.jpeg';
+    els.maxStake.value = maxStake;
+
+    autoSplit();
+    show();
+  }
+
+  return { openCalc };
+})();
+
 async function requestUpdateAndPoll() {
   const status = document.getElementById('updateStatus');
   const btn = document.getElementById('requestUpdate');
@@ -488,14 +726,43 @@ async function fetchData() {
         </div>
       </td>
       <td class="px-4 py-3">${bookiesCell}</td>
+      <td class="px-2 py-3 text-center">
+        ${(() => {
+          const left  = it.book_table?.best?.left  || {};
+          const right = it.book_table?.best?.right || {};
+          const aName = cleanAgencyName(left.agency || '');
+          const bName = cleanAgencyName(right.agency || '');
+          const aOdds = left.odds, bOdds = right.odds;
+          if (!aName || !bName || !aOdds || !bOdds) return '<span class="text-slate-300">—</span>';
+          const aLogo = logoFor(aName);
+          const bLogo = logoFor(bName);
+          const title = `${it.game || ''} — ${it.market || ''}`;
+          return `
+            <button class="calc-btn p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Open calculator"
+              data-aname="${aName}"
+              data-bname="${bName}"
+              data-aodds="${Number(aOdds)}"
+              data-bodds="${Number(bOdds)}"
+              data-alogo="${aLogo}"
+              data-blogo="${bLogo}"
+              data-title="${title.replace(/"/g,'&quot;')}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+                <path d="M8 7h8M7 11h3M7 15h3M7 19h3M14 11h3M14 15h3M14 19h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>`;
+        })()}
+      </td>
     `;
+
 
     frag.appendChild(tr);
 
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 8; // League col added
+    tdDetails.colSpan = 9; // League col added
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
     frag.appendChild(trDetails);
@@ -557,6 +824,24 @@ els.reset?.addEventListener('click', () => {
   updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSummary, 'All bookies');
 
   updateAndFetch();
+});
+
+els.tbody.addEventListener('click', (e) => {
+  const btn = e.target.closest('.calc-btn');
+  if (!btn) return;
+
+  const data = {
+    aName: btn.getAttribute('data-aname') || 'Side A',
+    bName: btn.getAttribute('data-bname') || 'Side B',
+    aOdds: Number(btn.getAttribute('data-aodds') || '0'),
+    bOdds: Number(btn.getAttribute('data-bodds') || '0'),
+    aLogo: btn.getAttribute('data-alogo') || '/logos/placeholder.jpeg',
+    bLogo: btn.getAttribute('data-blogo') || '/logos/placeholder.jpeg',
+    title: btn.getAttribute('data-title') || 'Calculator',
+    maxStake: 1000
+  };
+  Calc.openCalc(data);
+  e.stopPropagation(); // don't toggle the row expansion
 });
 
 els.refresh?.addEventListener('click', fetchData);
