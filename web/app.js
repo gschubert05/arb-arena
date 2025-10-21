@@ -362,16 +362,6 @@ const Calc = (() => {
     overlay.style.display = 'none';      modal.style.display = 'none'; // hard fallback
   }
 
-
-  function close() {
-    modal.classList.add('hidden');
-    overlay.classList.add('hidden');
-  }
-  function show() {
-    overlay.classList.remove('hidden');
-    modal.classList.remove('hidden');
-  }
-
   // core math
   function equalize(total, oA, oB) {
     // equal-payout baseline (unrounded)
