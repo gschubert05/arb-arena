@@ -443,10 +443,22 @@ const Calc = (() => {
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     els.copyA.addEventListener('click', () => navigator.clipboard.writeText(String(els.Astake.value || '')));
     els.copyB.addEventListener('click', () => navigator.clipboard.writeText(String(els.Bstake.value || '')));
-    els.maxStake.addEventListener('change', () => autoSplit());
+    //els.maxStake.addEventListener('change', () => autoSplit());
     els.round.addEventListener('change', () => autoSplit());
     els.Astake.addEventListener('input', manualRecalc);
     els.Bstake.addEventListener('input', manualRecalc);
+
+    // init from saved value (if any)
+    const savedMax = localStorage.getItem('calcMaxStake');
+    if (savedMax && !Number.isNaN(Number(savedMax))) {
+      els.maxStake.value = savedMax;
+    }
+
+    // persist on change + recalc
+    els.maxStake.addEventListener('change', () => {
+      localStorage.setItem('calcMaxStake', String(els.maxStake.value || ''));
+      autoSplit();
+    });
 
     // Open dropdown by clicking the whole card (but ignore stake inputs & copy buttons)
     els.cardA.addEventListener('click', (e) => {
@@ -559,7 +571,11 @@ const Calc = (() => {
   }
 
   function renderOptions(listEl, options, side) {
-    listEl.innerHTML = options.map(o => `
+    const sorted = (options || [])
+      .slice()
+      .sort((a, b) => Number(b.odds || 0) - Number(a.odds || 0)); // DESC by odds
+
+    listEl.innerHTML = sorted.map(o => `
       <div class="opt" data-agency="${o.agency}" data-odds="${o.odds}">
         <div class="left">
           <img src="${logoFor(o.agency)}" onerror="this.src='/logos/placeholder.jpeg'">
@@ -568,6 +584,7 @@ const Calc = (() => {
         <div class="odds">${(Number(o.odds)||0).toFixed(2)}</div>
       </div>
     `).join('');
+
     listEl.querySelectorAll('.opt').forEach(opt => {
       opt.addEventListener('click', () => {
         const agency = opt.getAttribute('data-agency');
@@ -606,7 +623,12 @@ const Calc = (() => {
     els.Alogo.src = aLogo || '/logos/placeholder.jpeg';
     els.Blogo.src = bLogo || '/logos/placeholder.jpeg';
     els.Abet.textContent = aBet; els.Bbet.textContent = bBet;
-    els.maxStake.value = maxStake;
+    {
+      const savedMax = localStorage.getItem('calcMaxStake');
+      els.maxStake.value = (savedMax && !Number.isNaN(Number(savedMax)))
+        ? savedMax
+        : (els.maxStake.value || String(maxStake));
+    }
 
     renderOptions(els.ddA, ctx.optsA, 'A');
     renderOptions(els.ddB, ctx.optsB, 'B');
