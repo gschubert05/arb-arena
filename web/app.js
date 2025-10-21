@@ -270,7 +270,7 @@ const Calc = (() => {
       width: '95vw',
       maxWidth: '680px',
       background: 'var(--tw-bg-opacity,#fff)',
-      borderRadius: '16px',
+      borderRadius: '20px',
       boxShadow: '0 10px 40px rgba(0,0,0,.25)',
       border: '1px solid rgba(100,116,139,.3)',
       zIndex: '2147483647',   // on top of everything
@@ -280,15 +280,15 @@ const Calc = (() => {
     modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="px-5 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
-        <div class="text-sm text-slate-600 dark:text-slate-300" id="calcTitle">Calculator</div>
+      <div class="px-6 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
+        <div class="text-base font-semibold pl-1 text-slate-800 dark:text-slate-100" id="calcTitle">Calculator</div>
         <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
             <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
           </svg>
         </button>
       </div>
-
+      
       <div class="p-5 bg-white dark:bg-slate-900 rounded-b-2xl">
         <!-- Side A -->
         <div class="calc-card">
@@ -344,7 +344,9 @@ const Calc = (() => {
             </select>
           </div>
           <div class="flex gap-2">
-            <button id="calcRecalc" class="w-full px-3 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white">Recalculate</button>
+            <button id="calcRecalc" class="w-full px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white">
+              Recalculate
+            </button>
             <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
           </div>
         </div>
