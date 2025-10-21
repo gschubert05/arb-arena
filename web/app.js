@@ -41,6 +41,15 @@
   document.head.appendChild(style);
 })();
 
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    #calcRecalc{background:#1d4ed8 !important;color:#fff}
+    #calcRecalc:hover{filter:brightness(0.95)}
+  `;
+  document.head.appendChild(style);
+})();
+
 // --- App state ---
 const state = {
   sortBy: 'roi',
@@ -269,15 +278,15 @@ const Calc = (() => {
       transform: 'translate(-50%, -50%)',
       width: '95vw',
       maxWidth: '680px',
-      background: 'var(--tw-bg-opacity,#fff)',   // keep a surface behind the inner blocks
       borderRadius: '20px',
       overflow: 'hidden',
-      padding: '12px',                            // <— this creates the breathing room
+      padding: '12px',
       boxShadow: '0 10px 40px rgba(0,0,0,.25)',
       border: '1px solid rgba(100,116,139,.3)',
       zIndex: '2147483647',
       display: 'none',
     });
+
 
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
@@ -354,8 +363,7 @@ const Calc = (() => {
               </select>
             </div>
             <div class="flex gap-2">
-              <button id="calcRecalc"
-                class="w-full px-3 py-2 rounded bg-blue-700 hover:bg-blue-700 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+              <button id="calcRecalc" class="w-full px-3 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
                 Recalculate
               </button>
               <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
@@ -367,7 +375,7 @@ const Calc = (() => {
             <div class="flex flex-wrap gap-2">
               <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
               <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
-              <span class="pill">Profit(<span id="calcRoi" class="tabular-nums"></span>): <b id="calcProfit" class="tabular-nums"></b></span>
+              <span class="pill"><span id="profitLabel"></span><b id="calcProfit" class="tabular-nums"></b></span>
             </div>
             <div class="calc-meta" id="calcHint"></div>
           </div>
@@ -409,6 +417,7 @@ const Calc = (() => {
       Abet: modal.querySelector('#calcAbet'),
       Bbet: modal.querySelector('#calcBbet'),
       Roi: modal.querySelector('#calcRoi'),
+      profitLabel: modal.querySelector('#profitLabel'),
     };
 
     els.close.addEventListener('click', close);
@@ -427,6 +436,8 @@ const Calc = (() => {
 
   function show() {
     //document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    const root = document.documentElement;
+    modal.style.background = root.classList.contains('dark') ? 'rgb(15 23 42)' : '#ffffff';
     overlay.style.display = 'block';
     modal.style.display = 'block';
   }
@@ -548,8 +559,6 @@ const Calc = (() => {
     els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down ~${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples (no $1 adjustments).`;
   }
 
-
-
   function manualRecalc() {
     const sA = Math.max(0, Number(els.Astake.value) || 0);
     const sB = Math.max(0, Number(els.Bstake.value) || 0);
@@ -564,9 +573,12 @@ const Calc = (() => {
     els.Apayout.textContent   = fmtMoney(payoutA);
     els.Bpayout.textContent   = fmtMoney(payoutB);
     els.minPayout.textContent = fmtMoney(minPayout);
-    els.profit.textContent    = fmtMoney(profit);
-    els.Roi.textContent       = `${roiPct.toFixed(2)}%`; // renders as Profit(5.05%): $50.00
+
+    // Label is plain text to avoid any spacing surprises
+    els.profitLabel.textContent = `Profit (${roiPct.toFixed(2)}%): `;
+    els.profit.textContent      = fmtMoney(profit);
   }
+
 
   function updateOutputs() {
     // recompute based on entered stakes
