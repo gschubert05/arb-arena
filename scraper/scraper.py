@@ -386,7 +386,7 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
             header_left_idx, header_right_idx = 1, 3
             row_agency_idx, row_left_idx, row_right_idx, row_updated_idx = 0, 1, 3, 4
         else:                       # normal
-            header_left_idx, header_right_idx = 2, 3
+            header_left_idx, header_right_idx = (header_len-3), (header_len-2)
             row_agency_idx, row_left_idx, row_right_idx, row_updated_idx = 0, 1, 2, 3
 
         def td_text_safe(tds, idx):
