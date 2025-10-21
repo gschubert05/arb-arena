@@ -375,13 +375,13 @@ const Calc = (() => {
         <!-- Controls (stacked) -->
         <div class="calc-controls mt-6">
           <div class="mb-3">
-            <label class="block text-xs text-slate-500 mt-3 mb-1">Max stake</label>
+            <label class="block text-sm text-slate-500 mt-3 mb-1">Max stake</label>
             <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
           </div>
 
           <div class="mb-4">
-            <label class="block text-xs text-slate-500 mt-3 mb-1">Rounding</label>
+            <label class="block text-sm text-slate-500 mt-3 mb-1">Rounding</label>
             <select id="calcRound"
                     class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
               <option value="10">Nearest $10</option>
