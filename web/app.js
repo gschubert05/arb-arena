@@ -288,7 +288,7 @@ const Calc = (() => {
           </svg>
         </button>
       </div>
-      
+
       <div class="p-5 bg-white dark:bg-slate-900 rounded-b-2xl">
         <!-- Side A -->
         <div class="calc-card">
@@ -409,13 +409,13 @@ const Calc = (() => {
   }
 
   function show() {
-    //document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    document.documentElement.style.overflow = 'hidden'; // lock background scroll
     overlay.style.display = 'block';
     modal.style.display = 'block';
   }
 
   function close() {
-    //document.documentElement.style.overflow = '';
+    document.documentElement.style.overflow = '';
     overlay.style.display = 'none';
     modal.style.display = 'none';
   }
