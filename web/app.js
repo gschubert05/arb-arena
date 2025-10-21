@@ -288,7 +288,6 @@ const Calc = (() => {
           </svg>
         </button>
       </div>
-
       <div class="p-5 bg-white dark:bg-slate-900 rounded-b-2xl">
         <!-- Side A -->
         <div class="calc-card">
@@ -409,13 +408,13 @@ const Calc = (() => {
   }
 
   function show() {
-    // document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    //document.documentElement.style.overflow = 'hidden'; // lock background scroll
     overlay.style.display = 'block';
     modal.style.display = 'block';
   }
 
   function close() {
-    // document.documentElement.style.overflow = '';
+    //document.documentElement.style.overflow = '';
     overlay.style.display = 'none';
     modal.style.display = 'none';
   }
@@ -517,23 +516,6 @@ const Calc = (() => {
     return best || { total: 0, rA: 0, rB: 0, payoutA: 0, payoutB: 0, minPayout: 0, profit: 0, diff: Infinity, score: -Infinity };
   }
 
-
-    let bestOverall = null;
-
-    for (let total = start; total >= stop; total -= 1) {
-      if (total <= 0) break;
-      const { sA, sB } = equalize(total);
-      const cand = localSearch(total, sA, sB);
-      if (cand && (!bestOverall || cand.score > bestOverall.score)) {
-        bestOverall = cand;
-      }
-    }
-
-    // Fallback if nothing found
-    return bestOverall || { total: 0, rA: 0, rB: 0, payoutA: 0, payoutB: 0, minPayout: 0, profit: 0, score: -Infinity, diff: Infinity };
-  }
-
-
   let ctx = { oA:1.9, oB:1.9, aName:'', bName:'', aLogo:'', bLogo:'' };
 
   function autoSplit() {
@@ -547,6 +529,8 @@ const Calc = (() => {
     updateOutputs();
     els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down ~${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples (no $1 adjustments).`;
   }
+
+
 
   function manualRecalc() {
     const sA = Math.max(0, Number(els.Astake.value)||0);
