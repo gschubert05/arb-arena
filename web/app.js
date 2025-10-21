@@ -409,13 +409,13 @@ const Calc = (() => {
   }
 
   function show() {
-    document.documentElement.style.overflow = 'hidden'; // lock background scroll
+    // document.documentElement.style.overflow = 'hidden'; // lock background scroll
     overlay.style.display = 'block';
     modal.style.display = 'block';
   }
 
   function close() {
-    document.documentElement.style.overflow = '';
+    // document.documentElement.style.overflow = '';
     overlay.style.display = 'none';
     modal.style.display = 'none';
   }
@@ -438,79 +438,85 @@ const Calc = (() => {
   // For each total, round stakes to `step` but also allow $1 micro-tweaks
   // around the rounded split to maximize *minimum profit*.
   function searchRounded(oA, oB, maxStake, step) {
-    const maxDown = 100;                       // search a $100 window
-    const start = Math.max(0, Math.floor(maxStake));
-    const stop  = Math.max(0, start - maxDown);
+    const stepAmt = Math.max(1, Number(step) || 10);
 
-    // helper: round to nearest step (5/10/1)
+    // Start at a step-aligned total; search down by `stepAmt`, for up to $100.
+    const start = Math.floor((Math.max(0, Math.floor(maxStake))) / stepAmt) * stepAmt;
+    const minTotal = Math.max(0, start - 100);
+
     const roundTo = (x, s) => Math.round(x / s) * s;
 
-    // equal-payout baseline (unrounded)
+    // Equal-payout baseline (unrounded)
     const equalize = (total) => {
-      const T = total / (1 / oA + 1 / oB);     // target payout if equalized
-      return { sA: T / oA, sB: T / oB, T };
+      const T = total / (1 / oA + 1 / oB);
+      return { sA: T / oA, sB: T / oB };
     };
 
-    // Evaluate a (rA, rB) candidate against a given total
+    // Score: max min-profit, then more used stake, then closer payouts
     function scoreCandidate(total, rA, rB) {
       if (rA < 0 || rB < 0) return null;
-      if (rA + rB > total) return null;        // respect total cap
-      const payoutA   = rA * oA;
-      const payoutB   = rB * oB;
-      const used      = rA + rB;
+      if ((rA + rB) > total) return null;
+
+      const payoutA = rA * oA;
+      const payoutB = rB * oB;
+      const used = rA + rB;
       const minPayout = Math.min(payoutA, payoutB);
-      const profit    = minPayout - used;
-      const diff      = Math.abs(payoutA - payoutB);
+      const profit = minPayout - used;
+      const diff = Math.abs(payoutA - payoutB);
 
-      // Prioritize higher min profit; then higher used stake; then tighter payouts
-      const score = profit * 1e9 + used * 1e3 - diff;
-      return { total, rA, rB, payoutA, payoutB, used, minPayout, profit, score, diff };
+      const score = profit * 1e9 + used * 1e3 - diff; // tie-breakers
+      return { total, rA, rB, payoutA, payoutB, used, minPayout, profit, diff, score };
     }
 
-    // Around a rounded split, try $1 redistributions up to ±step to improve min profit
-    function localSearch(total, sAeq, sBeq) {
-      const baseA = roundTo(sAeq, step);
-      const baseB = roundTo(sBeq, step);
+    // If over total, reduce in `stepAmt` chunks choosing the reduction that hurts min payout least
+    function shaveToFit(total, rA, rB) {
+      while (rA + rB > total) {
+        const tryA = (rA >= stepAmt) ? scoreCandidate(total, rA - stepAmt, rB) : null;
+        const tryB = (rB >= stepAmt) ? scoreCandidate(total, rA, rB - stepAmt) : null;
 
-      // Ensure we don't exceed total
-      let rA0 = baseA;
-      let rB0 = Math.min(baseB, total - rA0);
-      if (rA0 + rB0 > total) {
-        // shave the larger side to fit
-        if (rA0 >= rB0) rA0 = total - rB0;
-        else            rB0 = total - rA0;
+        if (!tryA && !tryB) break;
+        if (!tryB || (tryA && tryA.minPayout >= tryB.minPayout)) rA -= stepAmt;
+        else rB -= stepAmt;
       }
-      if (rA0 < 0) rA0 = 0;
-      if (rB0 < 0) rB0 = 0;
-
-      let best = scoreCandidate(total, rA0, rB0);
-
-      // Also try floor/ceil combos (to step), then micro-tweak
-      const floors = [Math.floor(sAeq / step) * step, Math.ceil(sAeq / step) * step]
-        .filter((v, i, a) => a.indexOf(v) === i);
-      const floorsB = [Math.floor(sBeq / step) * step, Math.ceil(sBeq / step) * step]
-        .filter((v, i, a) => a.indexOf(v) === i);
-
-      for (const a0 of floors) {
-        for (const b0 of floorsB) {
-          let rA = a0, rB = Math.min(b0, total - rA);
-          if (rA + rB > total) {
-            if (rA >= rB) rA = total - rB;
-            else          rB = total - rA;
-          }
-          let locBest = scoreCandidate(total, rA, rB);
-          for (let d = -radius; d <= radius; d++) {
-            const rA2 = Math.max(0, Math.min(total, rA + d));
-            const rB2 = Math.max(0, total - rA2);
-            const cand2 = scoreCandidate(total, rA2, rB2);
-            if (cand2 && (!locBest || cand2.score > locBest.score)) locBest = cand2;
-          }
-          if (locBest && (!best || locBest.score > best.score)) best = locBest;
-        }
-      }
-
-      return best;
+      return { rA: Math.max(0, rA), rB: Math.max(0, rB) };
     }
+
+    // If slack remains, add in `stepAmt` chunks to improve minimum payout the most
+    function topUpToTotal(total, rA, rB) {
+      while (rA + rB + stepAmt <= total) {
+        const addA = scoreCandidate(total, rA + stepAmt, rB);
+        const addB = scoreCandidate(total, rA, rB + stepAmt);
+
+        // pick the addition that gives higher minPayout; tie → reduce payout diff
+        const pickA = addA && (!addB || addA.minPayout > addB.minPayout ||
+                               (addA.minPayout === addB.minPayout && addA.diff < addB.diff));
+        if (pickA) rA += stepAmt;
+        else if (addB) rB += stepAmt;
+        else break;
+      }
+      return { rA, rB };
+    }
+
+    let best = null;
+
+    for (let total = start; total >= minTotal; total -= stepAmt) {
+      if (total <= 0) break;
+
+      // 1) equalize, 2) round to step, 3) shave to fit, 4) top up with step chunks
+      const { sA, sB } = equalize(total);
+      let rA = roundTo(sA, stepAmt);
+      let rB = roundTo(sB, stepAmt);
+
+      ({ rA, rB } = shaveToFit(total, rA, rB));
+      ({ rA, rB } = topUpToTotal(total, rA, rB));
+
+      const cand = scoreCandidate(total, rA, rB);
+      if (cand && (!best || cand.score > best.score)) best = cand;
+    }
+
+    return best || { total: 0, rA: 0, rB: 0, payoutA: 0, payoutB: 0, minPayout: 0, profit: 0, diff: Infinity, score: -Infinity };
+  }
+
 
     let bestOverall = null;
 
@@ -531,7 +537,7 @@ const Calc = (() => {
   let ctx = { oA:1.9, oB:1.9, aName:'', bName:'', aLogo:'', bLogo:'' };
 
   function autoSplit() {
-    const maxStake = clamp(Number(els.maxStake.value)||1000, 0, 1e7);
+    const maxStake = clamp(Number(els.maxStake.value) || 1000, 0, 1e7);
     const step = Number(els.round.value) || 10;
 
     const res = searchRounded(ctx.oA, ctx.oB, maxStake, step);
@@ -539,9 +545,8 @@ const Calc = (() => {
     els.Bstake.value = Math.max(0, Math.round(res.rB));
 
     updateOutputs();
-    els.hint.textContent = `Searched a $${Math.min(100, Math.floor(maxStake))} window from $${Math.floor(maxStake)} down in $1 totals; stakes rounded to $${step} with $1 micro-adjustments.`;
+    els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down ~${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples (no $1 adjustments).`;
   }
-
 
   function manualRecalc() {
     const sA = Math.max(0, Number(els.Astake.value)||0);
