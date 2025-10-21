@@ -90,6 +90,18 @@
   document.head.appendChild(style);
 })();
 
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Stack odds above stake on the right side */
+    .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+
+    /* Slightly more breathing room above the divider that precedes the pills */
+    .calc-summary{padding-top:16px}
+  `;
+  document.head.appendChild(style);
+})();
+
 // --- App state ---
 const state = {
   sortBy: 'roi',
@@ -386,29 +398,29 @@ const Calc = (() => {
           </div>
         </div>
 
-        <!-- Controls -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-5">
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Max stake</label>
-            <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
-                   class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Rounding</label>
-            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-              <option value="10">Nearest $10</option>
-              <option value="5">Nearest $5</option>
-              <option value="1">Nearest $1</option>
-            </select>
-          </div>
-          <div class="flex gap-2">
-            <button id="calcRecalc" class="w-full px-3 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">Recalculate</button>
-            <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
-          </div>
-        </div>
+        // <!-- Controls -->
+        // <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-5 mb-2">
+        //   <div>
+        //     <label class="block text-xs text-slate-500 mb-1">Max stake</label>
+        //     <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
+        //            class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+        //   </div>
+        //   <div>
+        //     <label class="block text-xs text-slate-500 mb-1">Rounding</label>
+        //     <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+        //       <option value="10">Nearest $10</option>
+        //       <option value="5">Nearest $5</option>
+        //       <option value="1">Nearest $1</option>
+        //     </select>
+        //   </div>
+        //   <div class="flex gap-2">
+        //     <button id="calcRecalc" class="w-full px-3 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">Recalculate</button>
+        //     <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
+        //   </div>
+        // </div>
 
         <!-- Summary -->
-        <div class="calc-summary mt-5">
+        <div class="calc-summary mt-6">
           <div class="flex flex-wrap gap-2">
             <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
             <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
