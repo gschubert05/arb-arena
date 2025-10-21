@@ -150,6 +150,15 @@ def extract_search_phrase(match_text: str) -> str:
     except Exception:
         return match_text
 
+def clean_agency_name(name: str) -> str:
+    n = (name or "").strip()
+    if n.lower().startswith("tab"):
+        return "TAB"
+    # keep your existing light cleanup approach
+    n = n.split("(", 1)[0]
+    n = n.split("-", 1)[0]
+    return n.strip()
+
 def _goto_multibet(driver: webdriver.Chrome, timeout: int = 20) -> None:
     """
     Super small, robust nav:
@@ -183,7 +192,7 @@ def _goto_multibet(driver: webdriver.Chrome, timeout: int = 20) -> None:
 # === First stage: scrape MultiBet page for pairs ===
 def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    _goto_multibet(driver) 
+    _goto_multibet(driver)
 
     # EXACTLY like the test script: look for name="compid" and id="update"
     input_el = _find_in_any_frame(driver, By.NAME, "compid", timeout=20)
@@ -210,7 +219,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
     # iterate all odds cells
     for td in soup.find_all("td", id="more-market-odds"):
         a_tags = td.find_all("a")
-        if len(a_tags) < 2
+        if len(a_tags) < 2:
             continue
 
         # 3-anchor case: middle draw @ 1.00 -> use outer two
@@ -238,7 +247,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
         except Exception:
             pass
 
-        # skip Win* markets (keeps parity with your original heuristic)
+        # skip Win* markets
         if market_name.startswith("Win"):
             continue
 
@@ -299,7 +308,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
         match_pair = f"{link_text_1} | {link_text_2}"
         row = {
-            "url": full_url,  # may be None; we handle that later
+            "url": full_url,  # may be None
             "market_percentage": round(market_pct, 2),
             "roi": round(roi, 6),
             "match": match_pair,
@@ -326,14 +335,8 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
 
     return rows
 
-
 # === Second stage: open betting page and compute best-agency odds ===
 def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_phrase: str) -> Optional[Dict[str, Any]]:
-    """
-    Open `url`, find the <td class="subheading"> containing `search_phrase`,
-    then parse the agency odds table beneath it.
-    Handles NORMAL, MAIN MARKET, and LINE-DRAW layouts.
-    """
     if not url:
         return None
     try:
@@ -410,7 +413,8 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
                 return (tds[idx].get_text(" ", strip=True) if 0 <= idx < n else "").strip()
 
             a = tds[a_idx].find("a") if 0 <= a_idx < n else None
-            agency   = (a.get_text(strip=True) if a else safe(a_idx)).strip()
+            agency_raw = (a.get_text(strip=True) if a else safe(a_idx)).strip()
+            agency = clean_agency_name(agency_raw)  # <-- normalize "TAB …" → "TAB"
             left_txt = safe(l_idx)
             right_txt= safe(r_idx)
 
@@ -464,7 +468,6 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
         return {"headers": headers, "rows": rows_out, "best": best}
     except Exception:
         return None
-
 
 # === Orchestrator ===
 def run_once(comp_ids: List[int]) -> Dict[str, Any]:

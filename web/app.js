@@ -131,12 +131,7 @@ function cleanAgencyName(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
   out = out.split('-')[0];
-  out = out.trim();
-
-  // NEW: collapse "TAB …" → "TAB"
-  if (/^tab\b/i.test(out)) return 'TAB';
-
-  return out;
+  return out.trim();
 }
 function agencySlug(name) {
   return cleanAgencyName(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -286,7 +281,8 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
     const row = document.createElement('label');
     row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
-    row.innerHTML = `<input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}"><span class="truncate">${cleanAgencyName(v)}</span>`;    wrapEl.appendChild(row);
+    row.innerHTML = `<input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}"><span class="truncate">${v}</span>`;
+    wrapEl.appendChild(row);
   });
 
   selectAllEl.checked = treatAllSelected;
