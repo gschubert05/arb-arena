@@ -131,7 +131,12 @@ function cleanAgencyName(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
   out = out.split('-')[0];
-  return out.trim();
+  out = out.trim();
+
+  // NEW: collapse "TAB …" → "TAB"
+  if (/^tab\b/i.test(out)) return 'TAB';
+
+  return out;
 }
 function agencySlug(name) {
   return cleanAgencyName(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
