@@ -13,6 +13,34 @@
   });
 })();
 
+// --- Calc modal compact styles (scoped) ---
+(() => {
+  const css = `
+  .calc-card{border:1px solid rgb(226 232 240/1);border-radius:14px;padding:12px;background:var(--calc-bg,#fff)}
+  .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
+  .calc-row{display:flex;align-items:center;gap:.75rem;justify-content:space-between}
+  .calc-id{display:flex;align-items:center;gap:.5rem;min-width:0}
+  .calc-id img{width:20px;height:20px;border-radius:6px;flex:none}
+  .calc-id .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .calc-odds{font-variant-numeric:tabular-nums;opacity:.85}
+  .calc-stake{display:flex;align-items:center;gap:.5rem}
+  .calc-stake input{width:110px;padding:.375rem .5rem;border:1px solid rgb(203 213 225/1);border-radius:10px;background:var(--calc-bg,#fff)}
+  .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
+  .calc-copy{font-size:.75rem;padding:.375rem .5rem;border-radius:8px;background:rgb(241 245 249/1)}
+  .dark .calc-copy{background:rgb(30 41 59/1)}
+  .calc-meta{font-size:.75rem;color:rgb(100 116 139/1)}
+  .dark .calc-meta{color:rgb(148 163 184/1)}
+  .calc-summary{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;border-top:1px solid rgb(226 232 240/1);padding-top:12px}
+  .dark .calc-summary{border-color:rgb(51 65 85/1)}
+  .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .6rem;border-radius:999px;background:rgb(241 245 249/1)}
+  .dark .pill{background:rgb(30 41 59/1)}
+  .pill b{font-variant-numeric:tabular-nums}
+  `;
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+})();
+
 // --- App state ---
 const state = {
   sortBy: 'roi',
@@ -252,7 +280,7 @@ const Calc = (() => {
     modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
+      <div class="px-5 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
         <div class="text-sm text-slate-600 dark:text-slate-300" id="calcTitle">Calculator</div>
         <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
@@ -260,40 +288,48 @@ const Calc = (() => {
           </svg>
         </button>
       </div>
-      <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 bg-white dark:bg-slate-900 rounded-b-2xl">
-        <div class="space-y-3">
-          <div class="text-xs uppercase tracking-wide text-slate-500">Side A</div>
-          <div class="flex items-center gap-2">
-            <img id="calcAlogo" class="w-6 h-6 rounded" src="/logos/placeholder.jpeg" alt="">
-            <div class="font-medium" id="calcAname"></div>
+
+      <div class="p-5 bg-white dark:bg-slate-900 rounded-b-2xl">
+        <!-- Side A -->
+        <div class="calc-card">
+          <div class="calc-row">
+            <div class="calc-id">
+              <img id="calcAlogo" src="/logos/placeholder.jpeg" alt="">
+              <div class="name" id="calcAname">Side A</div>
+            </div>
+            <div class="calc-odds">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
           </div>
-          <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
-          <div class="text-sm">
-            Stake:
-            <input id="calcAstake" type="number" step="1" min="0"
-                   class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <button id="copyA" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
+          <div class="calc-row" style="margin-top:10px">
+            <div class="calc-meta">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
+            <div class="calc-stake">
+              <span class="calc-meta">Stake</span>
+              <input id="calcAstake" type="number" step="1" min="0">
+              <button id="copyA" class="calc-copy">Copy</button>
+            </div>
           </div>
-          <div class="text-xs text-slate-500">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
         </div>
 
-        <div class="space-y-3">
-          <div class="text-xs uppercase tracking-wide text-slate-500">Side B</div>
-          <div class="flex items-center gap-2">
-            <img id="calcBlogo" class="w-6 h-6 rounded" src="/logos/placeholder.jpeg" alt="">
-            <div class="font-medium" id="calcBname"></div>
+        <!-- Side B -->
+        <div class="calc-card" style="margin-top:10px">
+          <div class="calc-row">
+            <div class="calc-id">
+              <img id="calcBlogo" src="/logos/placeholder.jpeg" alt="">
+              <div class="name" id="calcBname">Side B</div>
+            </div>
+            <div class="calc-odds">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
           </div>
-          <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
-          <div class="text-sm">
-            Stake:
-            <input id="calcBstake" type="number" step="1" min="0"
-                   class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <button id="copyB" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
+          <div class="calc-row" style="margin-top:10px">
+            <div class="calc-meta">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
+            <div class="calc-stake">
+              <span class="calc-meta">Stake</span>
+              <input id="calcBstake" type="number" step="1" min="0">
+              <button id="copyB" class="calc-copy">Copy</button>
+            </div>
           </div>
-          <div class="text-xs text-slate-500">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
         </div>
 
-        <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <!-- Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-4">
           <div>
             <label class="block text-xs text-slate-500 mb-1">Max stake</label>
             <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
@@ -313,16 +349,18 @@ const Calc = (() => {
           </div>
         </div>
 
-        <div class="md:col-span-2 flex items-center justify-between mt-2">
-          <div class="text-sm">
-            Total stake: <span id="calcTotal" class="tabular-nums"></span> &nbsp;·&nbsp;
-            Min payout: <span id="calcMinPayout" class="tabular-nums"></span> &nbsp;·&nbsp;
-            Profit: <span id="calcProfit" class="tabular-nums font-semibold"></span>
+        <!-- Summary -->
+        <div class="calc-summary mt-4">
+          <div class="flex flex-wrap gap-2">
+            <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
+            <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
+            <span class="pill">Profit: <b id="calcProfit" class="tabular-nums"></b></span>
           </div>
-          <div class="text-xs text-slate-500" id="calcHint"></div>
+          <div class="calc-meta" id="calcHint"></div>
         </div>
       </div>
     `;
+
 
     // append as last children of body (portal)
     document.body.appendChild(overlay);
