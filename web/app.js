@@ -556,7 +556,7 @@ const Calc = (() => {
     els.Bstake.value = Math.max(0, Math.round(res.rB));
 
     updateOutputs();
-    els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down ~${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples (no $1 adjustments).`;
+    els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down $${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples.`;
   }
 
   function manualRecalc() {
