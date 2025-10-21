@@ -222,20 +222,29 @@ const Calc = (() => {
   function ensureModal() {
     if (modal) return;
 
+    // Backdrop
     overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-black/40 z-40 hidden';
+    overlay.className = 'fixed inset-0 bg-black/40 z-[9998] hidden';
+    overlay.style.display = 'none'; // hard fallback
     overlay.addEventListener('click', close);
 
+    // Modal container
     modal = document.createElement('div');
-    modal.className = 'fixed z-50 inset-x-0 top-10 mx-auto w-[min(680px,95vw)] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hidden';
+    // super high z so nothing overlaps; centered horizontally; near top
+    modal.className = 'fixed z-[9999] inset-x-0 top-10 mx-auto w-[min(680px,95vw)] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hidden';
+    modal.style.display = 'none'; // hard fallback
+
     modal.innerHTML = `
       <div class="px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
         <div class="text-sm text-slate-500 dark:text-slate-300" id="calcTitle">Calculator</div>
         <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
+          </svg>
         </button>
       </div>
       <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- left -->
         <div class="space-y-3">
           <div class="text-xs uppercase tracking-wide text-slate-500">Side A</div>
           <div class="flex items-center gap-2">
@@ -243,10 +252,13 @@ const Calc = (() => {
             <div class="font-medium" id="calcAname"></div>
           </div>
           <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
-          <div class="text-sm">Stake: <input id="calcAstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"> <button id="copyA" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button></div>
+          <div class="text-sm">Stake:
+            <input id="calcAstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <button id="copyA" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
+          </div>
           <div class="text-xs text-slate-500">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
         </div>
-
+        <!-- right -->
         <div class="space-y-3">
           <div class="text-xs uppercase tracking-wide text-slate-500">Side B</div>
           <div class="flex items-center gap-2">
@@ -254,7 +266,10 @@ const Calc = (() => {
             <div class="font-medium" id="calcBname"></div>
           </div>
           <div class="text-sm text-slate-600 dark:text-slate-300">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
-          <div class="text-sm">Stake: <input id="calcBstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"> <button id="copyB" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button></div>
+          <div class="text-sm">Stake:
+            <input id="calcBstake" type="number" step="1" min="0" class="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            <button id="copyB" class="ml-2 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Copy</button>
+          </div>
           <div class="text-xs text-slate-500">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
         </div>
 
@@ -290,7 +305,7 @@ const Calc = (() => {
     document.body.appendChild(overlay);
     document.body.appendChild(modal);
 
-    // wire elements
+    // wire controls
     els = {
       title: modal.querySelector('#calcTitle'),
       close: modal.querySelector('#calcClose'),
@@ -318,7 +333,9 @@ const Calc = (() => {
 
     els.close.addEventListener('click', close);
     els.close2.addEventListener('click', close);
-    document.addEventListener('keydown', (e) => { if (!modal.classList.contains('hidden') && e.key === 'Escape') close(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
 
     els.copyA.addEventListener('click', () => navigator.clipboard.writeText(String(els.Astake.value || '')));
     els.copyB.addEventListener('click', () => navigator.clipboard.writeText(String(els.Bstake.value || '')));
@@ -329,6 +346,22 @@ const Calc = (() => {
     els.Astake.addEventListener('input', manualRecalc);
     els.Bstake.addEventListener('input', manualRecalc);
   }
+
+  function show() {
+    // lock background scroll
+    document.documentElement.classList.add('overflow-hidden');
+
+    overlay.classList.remove('hidden');  modal.classList.remove('hidden');
+    overlay.style.display = 'block';     modal.style.display = 'block'; // hard fallback
+  }
+
+  function close() {
+    document.documentElement.classList.remove('overflow-hidden');
+
+    overlay.classList.add('hidden');     modal.classList.add('hidden');
+    overlay.style.display = 'none';      modal.style.display = 'none'; // hard fallback
+  }
+
 
   function close() {
     modal.classList.add('hidden');
