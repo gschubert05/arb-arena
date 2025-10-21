@@ -282,95 +282,98 @@ const Calc = (() => {
     modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-        <div class="text-base font-semibold text-slate-800 dark:text-slate-100" id="calcTitle">Calculator</div>
-        <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
-            <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="px-6 py-5 bg-white dark:bg-slate-900">
-        <!-- Side A -->
-        <div class="calc-card">
-          <div class="calc-row">
-            <div class="calc-id">
-              <img id="calcAlogo" src="/logos/placeholder.jpeg" alt="">
-              <div class="name" id="calcAname">Side A</div>
-            </div>
-            <div class="calc-odds">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
-          </div>
-          <div class="calc-row" style="margin-top:8px">
-            <div class="calc-meta">Bet: <span id="calcAbet"></span></div>
-          </div>
-          <div class="calc-row" style="margin-top:10px">
-            <div class="calc-meta">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
-            <div class="calc-stake">
-              <span class="calc-meta">Stake</span>
-              <input id="calcAstake" type="number" step="1" min="0">
-              <button id="copyA" class="calc-copy">Copy</button>
-            </div>
-          </div>
+      <div class="p-4 md:p-5 bg-white dark:bg-slate-900">
+        <div class="px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <div class="text-base font-semibold text-slate-800 dark:text-slate-100" id="calcTitle">Calculator</div>
+          <button id="calcClose" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+              <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
         </div>
 
-        <!-- Side B -->
-        <div class="calc-card" style="margin-top:10px">
-          <div class="calc-row">
-            <div class="calc-id">
-              <img id="calcBlogo" src="/logos/placeholder.jpeg" alt="">
-              <div class="name" id="calcBname">Side B</div>
+        <div class="px-6 py-5 bg-white dark:bg-slate-900">
+          <!-- Side A -->
+          <div class="calc-card">
+            <div class="calc-row">
+              <div class="calc-id">
+                <img id="calcAlogo" src="/logos/placeholder.jpeg" alt="">
+                <div class="name" id="calcAname">Side A</div>
+              </div>
+              <div class="calc-odds">Odds: <span id="calcAodds" class="tabular-nums"></span></div>
             </div>
-            <div class="calc-odds">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
-          </div>
-          <div class="calc-row" style="margin-top:8px">
-            <div class="calc-meta">Bet: <span id="calcBbet"></span></div>
-          </div>
-          <div class="calc-row" style="margin-top:10px">
-            <div class="calc-meta">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
-            <div class="calc-stake">
-              <span class="calc-meta">Stake</span>
-              <input id="calcBstake" type="number" step="1" min="0">
-              <button id="copyB" class="calc-copy">Copy</button>
+            <div class="calc-row" style="margin-top:8px">
+              <div class="calc-meta">Bet: <span id="calcAbet"></span></div>
+            </div>
+            <div class="calc-row" style="margin-top:10px">
+              <div class="calc-meta">Payout: <span id="calcApayout" class="tabular-nums"></span></div>
+              <div class="calc-stake">
+                <span class="calc-meta">Stake</span>
+                <input id="calcAstake" type="number" step="1" min="0">
+                <button id="copyA" class="calc-copy">Copy</button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Controls -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-4">
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Max stake</label>
-            <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
-                   class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+          <!-- Side B -->
+          <div class="calc-card" style="margin-top:10px">
+            <div class="calc-row">
+              <div class="calc-id">
+                <img id="calcBlogo" src="/logos/placeholder.jpeg" alt="">
+                <div class="name" id="calcBname">Side B</div>
+              </div>
+              <div class="calc-odds">Odds: <span id="calcBodds" class="tabular-nums"></span></div>
+            </div>
+            <div class="calc-row" style="margin-top:8px">
+              <div class="calc-meta">Bet: <span id="calcBbet"></span></div>
+            </div>
+            <div class="calc-row" style="margin-top:10px">
+              <div class="calc-meta">Payout: <span id="calcBpayout" class="tabular-nums"></span></div>
+              <div class="calc-stake">
+                <span class="calc-meta">Stake</span>
+                <input id="calcBstake" type="number" step="1" min="0">
+                <button id="copyB" class="calc-copy">Copy</button>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Rounding</label>
-            <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-              <option value="10">Nearest $10</option>
-              <option value="5">Nearest $5</option>
-              <option value="1">Nearest $1</option>
-            </select>
-          </div>
-          <div class="flex gap-2">
-            <button id="calcRecalc"
-              class="w-full px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-              Recalculate
-            </button>
-            <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
-          </div>
-        </div>
 
-        <!-- Summary -->
-        <div class="calc-summary mt-4">
-          <div class="flex flex-wrap gap-2">
-            <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
-            <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
-            <span class="pill">Profit: <b id="calcProfit" class="tabular-nums"></b></span>
+          <!-- Controls -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end mt-4">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Max stake</label>
+              <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
+                     class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Rounding</label>
+              <select id="calcRound" class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+                <option value="10">Nearest $10</option>
+                <option value="5">Nearest $5</option>
+                <option value="1">Nearest $1</option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button id="calcRecalc"
+                class="w-full px-3 py-2 rounded bg-blue-700 hover:bg-blue-700 text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                Recalculate
+              </button>
+              <button id="calcClose2" class="w-full px-3 py-2 rounded bg-slate-200 dark:bg-slate-800">Close</button>
+            </div>
           </div>
-          <div class="calc-meta" id="calcHint"></div>
+
+          <!-- Summary -->
+          <div class="calc-summary mt-4">
+            <div class="flex flex-wrap gap-2">
+              <span class="pill">Total stake: <b id="calcTotal" class="tabular-nums"></b></span>
+              <span class="pill">Min payout: <b id="calcMinPayout" class="tabular-nums"></b></span>
+              <span class="pill">Profit (<span id="calcRoi" class="tabular-nums"></span>): <b id="calcProfit" class="tabular-nums"></b></span>
+            </div>
+            <div class="calc-meta" id="calcHint"></div>
+          </div>
         </div>
       </div>
     `;
+
 
 
 
@@ -404,6 +407,7 @@ const Calc = (() => {
       hint: modal.querySelector('#calcHint'),
       Abet: modal.querySelector('#calcAbet'),
       Bbet: modal.querySelector('#calcBbet'),
+      Roi: modal.querySelector('#calcRoi'),
     };
 
     els.close.addEventListener('click', close);
@@ -546,19 +550,21 @@ const Calc = (() => {
 
 
   function manualRecalc() {
-    const sA = Math.max(0, Number(els.Astake.value)||0);
-    const sB = Math.max(0, Number(els.Bstake.value)||0);
+    const sA = Math.max(0, Number(els.Astake.value) || 0);
+    const sB = Math.max(0, Number(els.Bstake.value) || 0);
     const payoutA = sA * ctx.oA;
     const payoutB = sB * ctx.oB;
-    const total = sA + sB;
+    const total   = sA + sB;
     const minPayout = Math.min(payoutA, payoutB);
-    const profit = minPayout - total;
+    const profit    = minPayout - total;
+    const roiPct    = total > 0 ? (profit / total) * 100 : 0;
 
-    els.total.textContent = fmtMoney(total);
-    els.Apayout.textContent = fmtMoney(payoutA);
-    els.Bpayout.textContent = fmtMoney(payoutB);
+    els.total.textContent     = fmtMoney(total);
+    els.Apayout.textContent   = fmtMoney(payoutA);
+    els.Bpayout.textContent   = fmtMoney(payoutB);
     els.minPayout.textContent = fmtMoney(minPayout);
-    els.profit.textContent = fmtMoney(profit);
+    els.profit.textContent    = fmtMoney(profit);
+    els.Roi.textContent       = `${roiPct.toFixed(2)}%`;
   }
 
   function updateOutputs() {
