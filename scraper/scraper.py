@@ -150,6 +150,11 @@ def extract_search_phrase(match_text: str) -> str:
     except Exception:
         return match_text
 
+def _norm_agency(name: str) -> str:
+    s = (name or "").strip()
+    # If it starts with "TAB" (e.g., "TAB Sportsbet"), collapse to just "TAB"
+    return "TAB" if s.upper().startswith("TAB") else s
+
 def _goto_multibet(driver: webdriver.Chrome, timeout: int = 20) -> None:
     """
     Super small, robust nav:
@@ -210,7 +215,7 @@ def scrape_competition(driver: webdriver.Chrome, compid: int) -> List[Dict[str, 
     # iterate all odds cells
     for td in soup.find_all("td", id="more-market-odds"):
         a_tags = td.find_all("a")
-        if len(a_tags) < 2:
+        if len(a_tags) < 2
             continue
 
         # 3-anchor case: middle draw @ 1.00 -> use outer two
@@ -410,9 +415,10 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
                 return (tds[idx].get_text(" ", strip=True) if 0 <= idx < n else "").strip()
 
             a = tds[a_idx].find("a") if 0 <= a_idx < n else None
-            agency   = (a.get_text(strip=True) if a else safe(a_idx)).strip()
-            left_txt = safe(l_idx)
-            right_txt= safe(r_idx)
+            agency_raw = (a.get_text(strip=True) if a else safe(a_idx)).strip()
+            agency     = _norm_agency(agency_raw)
+            left_txt   = safe(l_idx)
+            right_txt  = safe(r_idx)
 
             updated = ""
             if u_idx is not None and 0 <= u_idx < n:
