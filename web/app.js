@@ -13,101 +13,66 @@
   });
 })();
 
-// --- Calc modal compact styles (scoped) ---
+// --- Calculator styles (single, consolidated) ---
 (() => {
   const css = `
-  .calc-card{border:1px solid rgb(226 232 240/1);border-radius:14px;padding:12px;background:var(--calc-bg,#fff)}
+  /* Card */
+  .calc-card{
+    display:grid;
+    grid-template-columns:1fr auto;
+    align-items:center;
+    gap:16px;
+    border:1px solid rgb(226 232 240/1);
+    border-radius:16px;
+    padding:16px;
+    background:var(--calc-bg,#fff);
+  }
   .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
-  .calc-row{display:flex;align-items:center;gap:.75rem;justify-content:space-between}
-  .calc-id{display:flex;align-items:center;gap:.5rem;min-width:0}
-  .calc-id img{width:20px;height:20px;border-radius:6px;flex:none}
-  .calc-id .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .calc-odds{font-variant-numeric:tabular-nums;opacity:.85}
+
+  /* Left column (logo/name + bet + payout) */
+  .calc-left{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .calc-top{display:flex;align-items:center;gap:.6rem}
+  .calc-id img{width:22px;height:22px;border-radius:6px;flex:none}
+  .calc-id .name{font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* Right column (odds above stake) */
+  .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .calc-odds{font-variant-numeric:tabular-nums;opacity:.9;font-weight:600}
   .calc-stake{display:flex;align-items:center;gap:.5rem}
-  .calc-stake input{width:110px;padding:.375rem .5rem;border:1px solid rgb(203 213 225/1);border-radius:10px;background:var(--calc-bg,#fff)}
+  .calc-stake input{
+    width:128px;
+    padding:.45rem .6rem;
+    border:1px solid rgb(203 213 225/1);
+    border-radius:10px;
+    background:var(--calc-bg,#fff);
+    font-size:.95rem;
+  }
   .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
-  .calc-copy{font-size:.75rem;padding:.375rem .5rem;border-radius:8px;background:rgb(241 245 249/1)}
+  .calc-copy{font-size:.78rem;padding:.4rem .6rem;border-radius:8px;background:rgb(241 245 249/1)}
   .dark .calc-copy{background:rgb(30 41 59/1)}
-  .calc-meta{font-size:.75rem;color:rgb(100 116 139/1)}
+
+  /* Meta text */
+  .calc-meta{font-size:.85rem;color:rgb(100 116 139/1)}
   .dark .calc-meta{color:rgb(148 163 184/1)}
-  .calc-summary{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;border-top:1px solid rgb(226 232 240/1);padding-top:12px}
+
+  /* Controls (spacing above headings) */
+  .calc-controls > div > label{margin-top:12px} /* adds space above "Max stake" & "Rounding" */
+
+  /* Summary divider & pills */
+  .calc-summary{
+    border-top:1px solid rgb(226 232 240/1);
+    margin-top:18px;   /* space above the divider */
+    padding-top:14px;  /* space below the divider */
+    display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+  }
   .dark .calc-summary{border-color:rgb(51 65 85/1)}
+
   .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .6rem;border-radius:999px;background:rgb(241 245 249/1)}
   .dark .pill{background:rgb(30 41 59/1)}
   .pill b{font-variant-numeric:tabular-nums}
   `;
   const style = document.createElement('style');
   style.textContent = css;
-  document.head.appendChild(style);
-})();
-
-(() => {
-  const style = document.createElement('style');
-  style.textContent = `
-    #calcRecalc{background:#1d4ed8 !important;color:#fff}
-    #calcRecalc:hover{filter:brightness(0.95)}
-  `;
-  document.head.appendChild(style);
-})();
-
-(() => {
-  const css = `
-  /* Card = 2 columns: left (identity+meta), right (odds+stake) */
-  .calc-card{
-    display:grid;
-    grid-template-columns: 1fr auto;
-    align-items:center;
-    gap:16px;
-    border:1px solid rgb(226 232 240/1);
-    border-radius:16px;
-    padding:16px;
-    background:var(--calc-bg,#fff)
-  }
-  .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
-
-  .calc-left{display:flex;flex-direction:column;gap:6px;min-width:0}
-  .calc-top{display:flex;align-items:center;gap:.6rem}
-  .calc-id img{width:22px;height:22px;border-radius:6px;flex:none}
-  .calc-id .name{font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-  .calc-right{display:flex;align-items:center;gap:14px}
-  .calc-odds{font-variant-numeric:tabular-nums;opacity:.9;font-weight:600}
-  .calc-stake{display:flex;align-items:center;gap:.5rem}
-  .calc-stake input{width:128px;padding:.45rem .6rem;border:1px solid rgb(203 213 225/1);border-radius:10px;background:var(--calc-bg,#fff);font-size:0.95rem}
-  .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
-  .calc-copy{font-size:.78rem;padding:.4rem .6rem;border-radius:8px;background:rgb(241 245 249/1)}
-  .dark .calc-copy{background:rgb(30 41 59/1)}
-
-  .calc-meta{font-size:.85rem;color:rgb(100 116 139/1)}
-  .dark .calc-meta{color:rgb(148 163 184/1)}
-
-  /* Recalc always hover colour */
-  #calcRecalc{background:#1d4ed8 !important;color:#fff}
-  #calcRecalc:hover{filter:brightness(0.95)}
-  `;
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.head.appendChild(style);
-})();
-
-(() => {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* Stack odds above stake on the right side */
-    .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-
-    /* Slightly more breathing room above the divider that precedes the pills */
-    .calc-summary{padding-top:16px}
-  `;
-  document.head.appendChild(style);
-})();
-
-(() => {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* Extra space above the pills divider */
-    .calc-summary { margin-top: 18px; padding-top: 14px; }
-  `;
   document.head.appendChild(style);
 })();
 
@@ -410,13 +375,13 @@ const Calc = (() => {
         <!-- Controls (stacked) -->
         <div class="calc-controls mt-6">
           <div class="mb-3">
-            <label class="block text-xs text-slate-500 mb-1">Max stake</label>
+            <label class="block text-xs text-slate-500 mt-3 mb-1">Max stake</label>
             <input id="calcMaxStake" type="number" step="10" min="0" value="1000"
                    class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
           </div>
 
           <div class="mb-4">
-            <label class="block text-xs text-slate-500 mb-1">Rounding</label>
+            <label class="block text-xs text-slate-500 mt-3 mb-1">Rounding</label>
             <select id="calcRound"
                     class="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
               <option value="10">Nearest $10</option>
