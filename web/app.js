@@ -13,6 +13,20 @@
   });
 })();
 
+// --- Global overflow/width clamp (prevent horizontal scrollbar) ---
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    html, body { max-width: 100%; overflow-x: hidden; }
+    table { width: 100%; table-layout: fixed; }
+    thead th, tbody td { word-wrap: break-word; overflow-wrap: anywhere; }
+    .bookie-chip, .bookie-identity { min-width: 0; }
+    .bookie-name { display:inline-block; max-width: 100%; }
+    td svg { max-width: 100%; height: auto; }
+  `;
+  document.head.appendChild(style);
+})();
+
 // --- Calculator styles (single, consolidated) ---
 (() => {
   const css = `
@@ -230,7 +244,42 @@ function fmtWithTZ(iso) {
   try { return fmt.format(new Date(iso)); } catch { return iso; }
 }
 
-// --- Bookies chips ---
+// --- ROI & pairing helpers ---
+function roiFromOdds(a, b) {
+  const edge = (1 / a) + (1 / b);
+  if (edge >= 1) return -Infinity;   // not profitable
+  return (1 / edge) - 1;             // correct ROI
+}
+function bestPairWithin(optionsLeft, optionsRight, allowedSetLeft, allowedSetRight) {
+  const L = allowedSetLeft ? optionsLeft.filter(o => allowedSetLeft.has(cleanAgencyName(o.agency))) : optionsLeft;
+  const R = allowedSetRight ? optionsRight.filter(o => allowedSetRight.has(cleanAgencyName(o.agency))) : optionsRight;
+  let best = null;
+  for (const a of L) {
+    const ao = Number(a.odds);
+    if (!(ao > 1)) continue;
+    for (const b of R) {
+      const bo = Number(b.odds);
+      if (!(bo > 1)) continue;
+      const roi = roiFromOdds(ao, bo);
+      if (roi > 0 && (!best || roi > best.roi)) best = { left: a, right: b, roi };
+    }
+  }
+  return best; // {left, right, roi} or null
+}
+function requiredLeftOdds(bestRight) { return 1 / (1 - 1 / Number(bestRight)); }
+function requiredRightOdds(bestLeft) { return 1 / (1 - 1 / Number(bestLeft)); }
+function countProfitableOnLeft(optionsLeft, bestRight, allowedSetLeft){
+  if (!(bestRight > 1)) return 0;
+  const need = requiredLeftOdds(bestRight);
+  return optionsLeft.filter(o => (!allowedSetLeft || allowedSetLeft.has(cleanAgencyName(o.agency))) && Number(o.odds) >= need).length;
+}
+function countProfitableOnRight(optionsRight, bestLeft, allowedSetRight){
+  if (!(bestLeft > 1)) return 0;
+  const need = requiredRightOdds(bestLeft);
+  return optionsRight.filter(o => (!allowedSetRight || allowedSetRight.has(cleanAgencyName(o.agency))) && Number(o.odds) >= need).length;
+}
+
+// --- Bookies chips (legacy best-only renderer; we now override dynamically) ---
 function renderBestChips(bookTable) {
   if (!bookTable || !bookTable.best) return '';
   const left  = bookTable.best.left  || {};
@@ -294,7 +343,6 @@ function renderFullBookTable(it) {
 const Calc = (() => {
   let modal, overlay, els = {};
   const fmtMoney = v => '$' + (Number(v)||0).toFixed(2);
-  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
   function ensureModal() {
     if (modal) return;
@@ -443,24 +491,25 @@ const Calc = (() => {
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     els.copyA.addEventListener('click', () => navigator.clipboard.writeText(String(els.Astake.value || '')));
     els.copyB.addEventListener('click', () => navigator.clipboard.writeText(String(els.Bstake.value || '')));
-    //els.maxStake.addEventListener('change', () => autoSplit());
-    els.round.addEventListener('change', () => autoSplit());
-    els.Astake.addEventListener('input', manualRecalc);
-    els.Bstake.addEventListener('input', manualRecalc);
 
-    // init from saved value (if any)
+    // Persist + restore rounding and max stake
+    const savedRound = localStorage.getItem('calcRoundStep');
+    if (savedRound && ['1','5','10'].includes(savedRound)) els.round.value = savedRound;
+    els.round.addEventListener('change', () => {
+      localStorage.setItem('calcRoundStep', String(els.round.value || ''));
+      autoSplit();
+    });
+
     const savedMax = localStorage.getItem('calcMaxStake');
     if (savedMax && !Number.isNaN(Number(savedMax))) {
       els.maxStake.value = savedMax;
     }
-
-    // persist on change + recalc
     els.maxStake.addEventListener('change', () => {
       localStorage.setItem('calcMaxStake', String(els.maxStake.value || ''));
       autoSplit();
     });
 
-    // Open dropdown by clicking the whole card (but ignore stake inputs & copy buttons)
+    // Open dropdown by clicking the whole card (ignore stake/copy/dropdown itself)
     els.cardA.addEventListener('click', (e) => {
       if (e.target.closest('.calc-stake') || e.target.closest('.calc-dd')) return;
       toggleDD('A');
@@ -487,12 +536,11 @@ const Calc = (() => {
   }
   function close() { overlay.style.display = 'none'; modal.style.display = 'none'; }
 
-  // core math
+  // core math (rounded search)
   function searchRounded(oA, oB, maxStake, step) {
     const stepAmt = Math.max(1, Number(step) || 10);
     const start = Math.floor((Math.max(0, Math.floor(maxStake))) / stepAmt) * stepAmt;
     const minTotal = Math.max(0, start - 100);
-
     const equalize = (total) => {
       const T = total / (1 / oA + 1 / oB);
       return { sA: T / oA, sB: T / oB };
@@ -557,17 +605,18 @@ const Calc = (() => {
   }
 
   function manualRecalc() {
+    const fmt = (x)=>'$'+(Number(x)||0).toFixed(2);
     const sA = Math.max(0, Number(els.Astake.value) || 0);
     const sB = Math.max(0, Number(els.Bstake.value) || 0);
     const payoutA = sA * ctx.oA, payoutB = sB * ctx.oB;
     const total = sA + sB, minPayout = Math.min(payoutA, payoutB), profit = minPayout - total;
     const roiPct = total > 0 ? (profit/total)*100 : 0;
-    els.total.textContent = fmtMoney(total);
-    els.Apayout.textContent = fmtMoney(payoutA);
-    els.Bpayout.textContent = fmtMoney(payoutB);
-    els.minPayout.textContent = fmtMoney(minPayout);
+    els.total.textContent = fmt(total);
+    els.Apayout.textContent = fmt(payoutA);
+    els.Bpayout.textContent = fmt(payoutB);
+    els.minPayout.textContent = fmt(minPayout);
     els.profitLabel.textContent = `Profit (${roiPct.toFixed(2)}%): `;
-    els.profit.textContent = fmtMoney(profit);
+    els.profit.textContent = fmt(profit);
   }
 
   function renderOptions(listEl, options, side) {
@@ -623,12 +672,15 @@ const Calc = (() => {
     els.Alogo.src = aLogo || '/logos/placeholder.jpeg';
     els.Blogo.src = bLogo || '/logos/placeholder.jpeg';
     els.Abet.textContent = aBet; els.Bbet.textContent = bBet;
-    {
-      const savedMax = localStorage.getItem('calcMaxStake');
-      els.maxStake.value = (savedMax && !Number.isNaN(Number(savedMax)))
-        ? savedMax
-        : (els.maxStake.value || String(maxStake));
-    }
+
+    // Restore persisted values where possible
+    const savedMax = localStorage.getItem('calcMaxStake');
+    els.maxStake.value = (savedMax && !Number.isNaN(Number(savedMax)))
+      ? savedMax
+      : (els.maxStake.value || String(maxStake));
+
+    const savedRound = localStorage.getItem('calcRoundStep');
+    if (savedRound && ['1','5','10'].includes(savedRound)) els.round.value = savedRound;
 
     renderOptions(els.ddA, ctx.optsA, 'A');
     renderOptions(els.ddB, ctx.optsB, 'B');
@@ -679,7 +731,7 @@ function parseBets(matchStr) {
   return { top: label(parts[0] || ''), bottom: label(parts[1] || '') };
 }
 function isInteractive(el) {
-  return !!el.closest('a, button, input, select, label, textarea, summary');
+  return !!el.closest('a, button, input, select, label, textarea, summary);
 }
 
 // --- Generic checkbox panel renderer (fixed) ---
@@ -765,6 +817,90 @@ wireDropdown(els.bookiesWrapper, els.bookiesDropdown, els.bookiesPanel);
 wireDropdown(els.sportsWrapper,  els.sportsDropdown,  els.sportsPanel);
 wireDropdown(els.leaguesWrapper, els.leaguesDropdown, els.leaguesPanel);
 
+// --- Side list popovers (sorted by odds desc) ---
+function openSideListPopover(anchorEl, side, options) {
+  const items = (options || [])
+    .filter(o => Number(o.odds) > 1)
+    .sort((a,b) => Number(b.odds) - Number(a.odds));
+
+  const pop = document.createElement('div');
+  pop.className = 'side-list-popover';
+  Object.assign(pop.style, {
+    position: 'fixed',
+    zIndex: '2147483645',
+    minWidth: '220px',
+    maxWidth: '320px',
+    maxHeight: '60vh',
+    overflowY: 'auto',
+    background: document.documentElement.classList.contains('dark') ? 'rgb(15 23 42)' : '#fff',
+    border: '1px solid rgba(100,116,139,.3)',
+    borderRadius: '12px',
+    boxShadow: '0 10px 30px rgba(0,0,0,.20)',
+    padding: '8px',
+  });
+
+  pop.innerHTML = `
+    <div class="text-xs font-semibold mb-2">${side === 'left' ? 'Left' : 'Right'} side — all bookies</div>
+    <div class="divide-y divide-slate-200 dark:divide-slate-700">
+      ${items.map(it => `
+        <button class="w-full text-left px-2 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded flex items-center gap-2 side-pick"
+                data-agency="${it.agency}" data-odds="${Number(it.odds)}">
+          <img src="${logoFor(it.agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.jpeg'">
+          <span class="flex-1 truncate">${it.agency}</span>
+          <span class="tabular-nums font-medium">${Number(it.odds).toFixed(2)}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  document.body.appendChild(pop);
+
+  // position near anchor
+  const r = anchorEl.getBoundingClientRect();
+  const x = Math.min(window.innerWidth - pop.offsetWidth - 8, r.left);
+  const y = Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 6);
+  pop.style.left = `${Math.max(8, x)}px`;
+  pop.style.top  = `${Math.max(8, y)}px`;
+
+  const onDoc = (e) => { if (!pop.contains(e.target)) cleanup(); };
+  const onEsc = (e) => { if (e.key === 'Escape') cleanup(); };
+  function cleanup() {
+    document.removeEventListener('mousedown', onDoc);
+    document.removeEventListener('keydown', onEsc);
+    pop.remove();
+  }
+  document.addEventListener('mousedown', onDoc);
+  document.addEventListener('keydown', onEsc);
+
+  pop.querySelectorAll('.side-pick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const agency = btn.getAttribute('data-agency');
+      const odds = Number(btn.getAttribute('data-odds'));
+      const tr = anchorEl.closest('tr');
+      if (!tr || !tr._pairToUse) return;
+      const other = side === 'left' ? tr._pairToUse.right : tr._pairToUse.left;
+      const a = side === 'left' ? { agency, odds } : other;
+      const b = side === 'left' ? other : { agency, odds };
+
+      const title = `${tr.querySelector('td:nth-child(4)')?.textContent || ''} — ${tr.querySelector('td:nth-child(5)')?.textContent || ''}`;
+
+      Calc.openCalc({
+        aName: a.agency, bName: b.agency,
+        aOdds: a.odds,   bOdds: b.odds,
+        aLogo: logoFor(a.agency),
+        bLogo: logoFor(b.agency),
+        title,
+        aBet: 'Left', bBet: 'Right',
+        maxStake: Number(localStorage.getItem('calcMaxStake')) || 1000,
+        optionsA: tr._leftOptions || [],
+        optionsB: tr._rightOptions || []
+      });
+
+      cleanup();
+    });
+  });
+}
+
 // --- Fetch + render ---
 async function fetchData() {
   if (els.tzSelect) els.tzSelect.value = state.tz;
@@ -845,39 +981,84 @@ async function fetchData() {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50';
 
-    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
     const bets = parseBets(it.match);
     const kickoffTxt = it.kickoff ? fmtWithTZ(it.kickoff) : (it.date || it.dateISO || '');
     const leagueCell = it.league || '—';
-    const bookiesCell = it.book_table ? renderBestChips(it.book_table) : `<span class="text-slate-400">—</span>`;
 
-    // Build options arrays for each side from full table
-    let optionsPacked = '';
+    // Build option arrays from full table
+    let optsA = [], optsB = [];
     if (it.book_table?.rows?.length) {
       const rows = it.book_table.rows;
-      const optsA = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  })).filter(o=>o.agency && o.odds>0);
-      const optsB = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) })).filter(o=>o.agency && o.odds>0);
-      optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({A:optsA, B:optsB}))));
+      optsA = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  })).filter(o=>o.agency && o.odds>0);
+      optsB = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) })).filter(o=>o.agency && o.odds>0);
     }
 
-    // Get best sides
-    let aName='', bName='', aOdds=0, bOdds=0, aLogo='', bLogo='';
-    if (it.book_table?.best) {
-      const left=it.book_table.best.left||{}, right=it.book_table.best.right||{};
-      aName = cleanAgencyName(left.agency||''); bName = cleanAgencyName(right.agency||'');
-      aOdds = Number(left.odds)||0; bOdds = Number(right.odds)||0;
-      aLogo = logoFor(aName); bLogo = logoFor(bName);
-    }
+    // Best profitable pair within current bookie filters (ANY within filters)
+    const selected = state.selectedBookies;
+    const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
+    const pair = bestPairWithin(optsA, optsB, allowed, allowed);
+
+    // Hide row if no profitable pair within filters
+    if (!pair) continue;
+
+    // Counts for tiny footer
+    const leftCount  = countProfitableOnLeft(optsA,  pair.right.odds, allowed);
+    const rightCount = countProfitableOnRight(optsB, pair.left.odds,  allowed);
+    const leftNote  = leftCount  > 1 ? `+${leftCount - 1} other profitable left option${leftCount - 1 > 1 ? 's' : ''}` : '';
+    const rightNote = rightCount > 1 ? `+${rightCount - 1} other profitable right option${rightCount - 1 > 1 ? 's' : ''}` : '';
+    const footerText = [leftNote, rightNote].filter(Boolean).join(' · ');
+
+    // Chips for chosen pair
+    const chip = (agency, odds) => `
+      <div class="bookie-chip">
+        <div class="bookie-identity min-w-0">
+          <img src="${logoFor(agency)}" alt="${agency}" onerror="this.src='/logos/placeholder.jpeg'">
+          <span class="bookie-name truncate">${agency}</span>
+        </div>
+        <span class="bookie-odds tabular-nums">${Number(odds).toFixed(2)}</span>
+      </div>`;
+
+    const bookiesCell = `
+      <div class="flex flex-col gap-2">
+        ${chip(pair.left.agency, pair.left.odds)}
+        ${chip(pair.right.agency, pair.right.odds)}
+        ${footerText ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+          <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="left">Left list</button>
+          <span class="mx-1">|</span>
+          <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="right">Right list</button>
+          <span class="ml-2">${footerText}</span>
+        </div>` : ''}
+      </div>`;
+
+    // ROI column stays from API (if provided)
+    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
+
+    // Data for calculator (use filtered pair)
+    const aName = cleanAgencyName(pair.left.agency);
+    const bName = cleanAgencyName(pair.right.agency);
+    const aOdds = Number(pair.left.odds) || 0;
+    const bOdds = Number(pair.right.odds) || 0;
+    const aLogo = logoFor(aName);
+    const bLogo = logoFor(bName);
+
     const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
     const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
 
-    // Store calc data on the row (so clicking the row opens the calc)
+    // pack options for modal
+    const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({A:optsA, B:optsB}))));
+
+    // Store calc data on the row
     tr.dataset.calc = JSON.stringify({
       aName,bName,aOdds,bOdds,aLogo,bLogo,title,aBet:headerL,bBet:headerR,optionsPacked
     });
 
-    // “Odds table” button now goes in the calc column
+    // Save options/pair for popovers
+    tr._leftOptions  = optsA;
+    tr._rightOptions = optsB;
+    tr._pairToUse    = { left:{ agency:aName, odds:aOdds }, right:{ agency:bName, odds:bOdds } };
+
+    // “Odds table” button in the calc column
     const oddsBtn = `
       <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
@@ -918,7 +1099,7 @@ async function fetchData() {
 
     // Clicking the **row** opens calculator
     tr.addEventListener('click', (e) => {
-      if (e.target.closest('.toggle-odds')) return; // the button has its own behavior
+      if (e.target.closest('.toggle-odds') || e.target.closest('.side-list-btn')) return;
       const payload = JSON.parse(tr.dataset.calc || '{}');
       let optionsA=[], optionsB=[];
       try {
@@ -932,7 +1113,8 @@ async function fetchData() {
         aOdds: payload.aOdds, bOdds: payload.bOdds,
         aLogo: payload.aLogo, bLogo: payload.bLogo,
         title: payload.title, aBet: payload.aBet, bBet: payload.bBet,
-        maxStake: 1000, optionsA, optionsB
+        maxStake: Number(localStorage.getItem('calcMaxStake')) || 1000,
+        optionsA, optionsB
       });
     });
 
@@ -944,6 +1126,17 @@ async function fetchData() {
         const rect = trDetails.getBoundingClientRect();
         if (rect.bottom > window.innerHeight) trDetails.scrollIntoView({ block: 'nearest' });
       }
+    });
+
+    // Side list popovers (delegate)
+    tr.addEventListener('click', (e) => {
+      const btn = e.target.closest('.side-list-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      const side = btn.getAttribute('data-side'); // 'left' | 'right'
+      const options = side === 'left' ? tr._leftOptions : tr._rightOptions;
+      if (!options || !options.length) return;
+      openSideListPopover(btn, side, options);
     });
   }
 
