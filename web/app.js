@@ -731,7 +731,7 @@ function parseBets(matchStr) {
   return { top: label(parts[0] || ''), bottom: label(parts[1] || '') };
 }
 function isInteractive(el) {
-  return !!el.closest('a, button, input, select, label, textarea, summary);
+  return !!el.closest('a, button, input, select, label, textarea, summary');
 }
 
 // --- Generic checkbox panel renderer (fixed) ---
@@ -1004,11 +1004,11 @@ async function fetchData() {
     // Counts for tiny footer
     const leftCount  = countProfitableOnLeft(optsA,  pair.right.odds, allowed);
     const rightCount = countProfitableOnRight(optsB, pair.left.odds,  allowed);
+
     const leftNote  = leftCount  > 1 ? `+${leftCount - 1} other profitable left option${leftCount - 1 > 1 ? 's' : ''}` : '';
     const rightNote = rightCount > 1 ? `+${rightCount - 1} other profitable right option${rightCount - 1 > 1 ? 's' : ''}` : '';
-    const footerText = [leftNote, rightNote].filter(Boolean).join(' · ');
+    const extrasText = [leftNote, rightNote].filter(Boolean).join(' · ');
 
-    // Chips for chosen pair
     const chip = (agency, odds) => `
       <div class="bookie-chip">
         <div class="bookie-identity min-w-0">
@@ -1020,15 +1020,16 @@ async function fetchData() {
 
     const bookiesCell = `
       <div class="flex flex-col gap-2">
-        ${chip(pair.left.agency, pair.left.odds)}
+        ${chip(pair.left.agency,  pair.left.odds)}
         ${chip(pair.right.agency, pair.right.odds)}
-        ${footerText ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
           <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="left">Left list</button>
           <span class="mx-1">|</span>
           <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="right">Right list</button>
-          <span class="ml-2">${footerText}</span>
-        </div>` : ''}
+          ${extrasText ? `<span class="ml-2">${extrasText}</span>` : ``}
+        </div>
       </div>`;
+
 
     // ROI column stays from API (if provided)
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
@@ -1070,7 +1071,7 @@ async function fetchData() {
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
-      <td class="px-4 py-3 whitespace-nowrap">${leagueCell}</td>
+      <td class="px-4 py-3>${leagueCell}</td>
       <td class="px-4 py-3">${it.game || ''}</td>
       <td class="px-4 py-3">${it.market || ''}</td>
       <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
