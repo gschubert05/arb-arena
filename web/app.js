@@ -1,4 +1,11 @@
 // --- Theme toggle ---
+
+// ==== DIAGNOSTIC BANNER ====
+const __ARB_VERSION__ = 'app.js v2025-11-11c';
+console.log('%c' + __ARB_VERSION__, 'padding:2px 6px;border-radius:6px;background:#0ea5e9;color:#fff;font-weight:700');
+// expose for quick check in console
+window.__ARB_VERSION__ = __ARB_VERSION__;
+
 (() => {
   const root = document.documentElement;
   const saved = localStorage.getItem('theme');
