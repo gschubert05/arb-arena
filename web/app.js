@@ -1047,8 +1047,6 @@ async function fetchData() {
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
 
     // Data for calculator (use filtered pair)
-    const aName = cleanAgencyName(pair.left.agency);
-    const bName = cleanAgencyName(pair.right.agency);
     const aOdds = Number(pair.left.odds) || 0;
     const bOdds = Number(pair.right.odds) || 0;
     const aLogo = logoFor(aName);
