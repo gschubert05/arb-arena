@@ -1005,14 +1005,28 @@ async function fetchData() {
     // Hide row if no profitable pair within filters
     if (!pair) continue;
 
-    // Counts for tiny footer
-    const leftCount  = countProfitableOnLeft(optsA,  pair.right.odds, allowed);
-    const rightCount = countProfitableOnRight(optsB, pair.left.odds,  allowed);
+    // --- counts of *other* profitable options on each side (within current filters)
+    const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
+    const needLeft  = requiredLeftOdds(pair.right.odds);
+    const needRight = requiredRightOdds(pair.left.odds);
 
-    const leftNote  = leftCount  > 1 ? `+${leftCount - 1} other profitable left option${leftCount - 1 > 1 ? 's' : ''}` : '';
-    const rightNote = rightCount > 1 ? `+${rightCount - 1} other profitable right option${rightCount - 1 > 1 ? 's' : ''}` : '';
-    const extrasText = [leftNote, rightNote].filter(Boolean).join(' · ');
+    const leftProfitable = optsA.filter(o =>
+      (!allowed || allowed.has(cleanAgencyName(o.agency))) &&
+      Number(o.odds) >= needLeft
+    );
+    const rightProfitable = optsB.filter(o =>
+      (!allowed || allowed.has(cleanAgencyName(o.agency))) &&
+      Number(o.odds) >= needRight
+    );
 
+    // subtract the chosen agency if it's in the profitable set
+    const aName = cleanAgencyName(pair.left.agency);
+    const bName = cleanAgencyName(pair.right.agency);
+
+    const leftOthers  = Math.max(0, leftProfitable.length  - (leftProfitable.some(o => cleanAgencyName(o.agency) === aName) ? 1 : 0));
+    const rightOthers = Math.max(0, rightProfitable.length - (rightProfitable.some(o => cleanAgencyName(o.agency) === bName) ? 1 : 0));
+
+    // Chips + under-chip labels
     const chip = (agency, odds) => `
       <div class="bookie-chip">
         <div class="bookie-identity min-w-0">
@@ -1022,18 +1036,20 @@ async function fetchData() {
         <span class="bookie-odds tabular-nums">${Number(odds).toFixed(2)}</span>
       </div>`;
 
+    const leftLabel  = leftOthers  > 0 ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="left">+${leftOthers} other profitable bookies</button>` : '';
+    const rightLabel = rightOthers > 0 ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="right">+${rightOthers} other profitable bookies</button>` : '';
+
     const bookiesCell = `
       <div class="flex flex-col gap-2">
-        ${chip(pair.left.agency,  pair.left.odds)}
-        ${chip(pair.right.agency, pair.right.odds)}
-        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-          <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="left">Left list</button>
-          <span class="mx-1">|</span>
-          <button class="underline underline-offset-2 hover:no-underline side-list-btn" data-side="right">Right list</button>
-          ${extrasText ? `<span class="ml-2">${extrasText}</span>` : ``}
+        <div>
+          ${chip(aName, pair.left.odds)}
+          ${leftLabel}
+        </div>
+        <div>
+          ${chip(bName, pair.right.odds)}
+          ${rightLabel}
         </div>
       </div>`;
-
 
     // ROI column stays from API (if provided)
     const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
