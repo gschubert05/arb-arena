@@ -997,14 +997,6 @@ async function fetchData() {
       optsB = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) })).filter(o=>o.agency && o.odds>0);
     }
 
-    // Best profitable pair within current bookie filters (ANY within filters)
-    const selected = state.selectedBookies;
-    const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
-    const pair = bestPairWithin(optsA, optsB, allowed, allowed);
-
-    // Hide row if no profitable pair within filters
-    if (!pair) continue;
-
     // --- counts of *other* profitable options on each side (within current filters)
     const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
     const needLeft  = requiredLeftOdds(pair.right.odds);
