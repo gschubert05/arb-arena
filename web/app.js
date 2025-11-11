@@ -18,7 +18,7 @@ console.log("ARB app.js build 2025-11-11-01");
 })();
 
 // --- Global overflow/width clamp (prevent horizontal scrollbar) ---
-(() => {
+/*(() => {
   const style = document.createElement('style');
   style.textContent = `
     html, body { max-width: 100%; overflow-x: hidden; }
@@ -29,7 +29,7 @@ console.log("ARB app.js build 2025-11-11-01");
     td svg { max-width: 100%; height: auto; }
   `;
   document.head.appendChild(style);
-})();
+})();*/
 
 // --- Calculator styles (single, consolidated) ---
 (() => {
