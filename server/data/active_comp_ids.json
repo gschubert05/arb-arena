@@ -1,5 +1,5 @@
 {
-  "discoveredAt": "2025-11-10T02:30:10Z",
+  "discoveredAt": "2025-11-11T02:27:00Z",
   "range": "1-150,450,650",
   "skip": [
     72,
@@ -42,6 +42,7 @@
     71,
     76,
     79,
+    83,
     84,
     87,
     88,
@@ -49,6 +50,7 @@
     93,
     94,
     95,
+    96,
     99,
     101,
     102,
@@ -60,9 +62,8 @@
     112,
     113,
     118,
-    125,
-    126,
-    132,
+    131,
+    133,
     135,
     450,
     650
@@ -336,7 +337,7 @@
     "24": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 2
+      "market_header_tables": 3
     },
     "25": {
       "td_more_market_odds": 0,
@@ -556,7 +557,7 @@
     "68": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 2
+      "market_header_tables": 4
     },
     "69": {
       "td_more_market_odds": 0,
@@ -601,7 +602,7 @@
     "79": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 4
     },
     "80": {
       "td_more_market_odds": 0,
@@ -621,7 +622,7 @@
     "83": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 1
     },
     "84": {
       "td_more_market_odds": 0,
@@ -686,7 +687,7 @@
     "96": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 1
     },
     "97": {
       "td_more_market_odds": 0,
@@ -711,12 +712,12 @@
     "101": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 4
     },
     "102": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 3
     },
     "103": {
       "td_more_market_odds": 0,
@@ -821,12 +822,12 @@
     "125": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 0
     },
     "126": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 0
     },
     "127": {
       "td_more_market_odds": 0,
@@ -851,17 +852,17 @@
     "131": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 4
     },
     "132": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 0
     },
     "133": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 3
     },
     "134": {
       "td_more_market_odds": 0,
@@ -951,7 +952,7 @@
     "450": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 2
+      "market_header_tables": 3
     },
     "650": {
       "td_more_market_odds": 0,
