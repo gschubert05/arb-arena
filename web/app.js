@@ -1075,7 +1075,7 @@ async function fetchData() {
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
       <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
-      <td class="px-4 py-3>${leagueCell}</td>
+      <td class="px-4 py-3">${leagueCell}</td>
       <td class="px-4 py-3">${it.game || ''}</td>
       <td class="px-4 py-3">${it.market || ''}</td>
       <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
