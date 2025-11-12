@@ -17,6 +17,25 @@ console.log("ARB app.js build 2025-11-12-05");
   });
 })();
 
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Force tiny icons in the Bookies dropdown */
+    #bookiesPanel label .bk-ico { 
+      width:14px; height:14px; display:inline-flex; 
+      align-items:center; justify-content:center; 
+      flex:0 0 auto; margin-left:4px;
+    }
+    #bookiesPanel label .bk-ico img {
+      width:14px !important; height:14px !important; 
+      object-fit: contain; border-radius:3px;
+    }
+    /* Keep rows compact */
+    #bookiesPanel label { gap:6px !important; padding:6px 8px !important; }
+  `;
+  document.head.appendChild(style);
+})();
+
 // --- Global overflow/width clamp (prevent horizontal scrollbar) ---
 /*(() => {
   const style = document.createElement('style');
@@ -755,17 +774,14 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
 
     const row = document.createElement('label');
-    // tighter gap for tiny icons
-    row.className = "inline-flex items-center gap-1 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 w-full";
+    row.className = "inline-flex items-center p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 w-full";
 
     if (allKey === 'bookie') {
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
-        <img src="${logoFor(v)}" alt="" class="w-3 h-3 rounded-sm shrink-0" onerror="this.src='/logos/placeholder.jpeg'">
+        <span class="bk-ico"><img src="${logoFor(v)}" alt="" onerror="this.src='/logos/placeholder.jpeg'"></span>
         <span class="truncate text-sm">${v}</span>
       `;
-      // If you want exact pixel control regardless of Tailwind base size, uncomment:
-      // row.querySelector('img').style.cssText = 'width:12px;height:12px';
     } else {
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
