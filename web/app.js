@@ -990,59 +990,57 @@ async function fetchData() {
     const leagueCell = it.league || '—';
 
     // Build option arrays from full table
-    let optsA = [], optsB = [];
+    let optsAAll = [], optsBAll = [];
     if (it.book_table?.rows?.length) {
       const rows = it.book_table.rows;
-      optsA = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  }))
-                  .filter(o => o.agency && o.odds > 0);
-      optsB = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) }))
-                  .filter(o => o.agency && o.odds > 0);
+      optsAAll = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  }))
+                     .filter(o => o.agency && o.odds > 1);
+      optsBAll = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) }))
+                     .filter(o => o.agency && o.odds > 1);
     }
 
-    // Best profitable pair within current bookie filters (ANY within filters)
+    // Apply bookie filter to BOTH sides
     const selected = state.selectedBookies;
     const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
-    const pair = bestPairWithin(optsA, optsB, allowed, allowed);
+    const optsA = allowed ? optsAAll.filter(o => allowed.has(o.agency)) : optsAAll;
+    const optsB = allowed ? optsBAll.filter(o => allowed.has(o.agency)) : optsBAll;
 
-    // Hide row if no profitable pair within filters
-    if (!pair) continue;
+    // Find best profitable pair within the filtered sets
+    let best = null;
+    for (const a of optsA) {
+      const ao = Number(a.odds); if (!(ao > 1)) continue;
+      for (const b of optsB) {
+        const bo = Number(b.odds); if (!(bo > 1)) continue;
+        const roi = roiFromOdds(ao, bo); // = 1/(1/a+1/b) - 1
+        if (roi > 0 && (!best || roi > best.roi)) best = { left: a, right: b, roi };
+      }
+    }
+    if (!best) continue; // hide row if no profitable pair within selected bookies
 
-    // ROI column from API (if provided)
-    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
-
-    // Calculator data (use selected pair)
-    const aName = cleanAgencyName(pair.left.agency);
-    const bName = cleanAgencyName(pair.right.agency);
-    const aOdds = Number(pair.left.odds) || 0;
-    const bOdds = Number(pair.right.odds) || 0;
+    // Calculator data (use the chosen filtered pair)
+    const aName = best.left.agency;
+    const bName = best.right.agency;
+    const aOdds = Number(best.left.odds);
+    const bOdds = Number(best.right.odds);
     const aLogo = logoFor(aName);
     const bLogo = logoFor(bName);
 
-    const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
-    const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
-    const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
+    // Compute profitable alternatives (ONLY within selected bookies)
+    const needLeft  = requiredLeftOdds(bOdds);   // min left odds to be profitable vs chosen right
+    const needRight = requiredRightOdds(aOdds);  // min right odds to be profitable vs chosen left
 
-    // Count OTHER profitable options on each side (within filters) relative to the chosen agency
-    const needLeft  = requiredLeftOdds(bOdds);   // minimum left odds to be profitable vs chosen right
-    const needRight = requiredRightOdds(aOdds);  // minimum right odds to be profitable vs chosen left
+    const leftProfitable  = optsA.filter(o => Number(o.odds) >= needLeft);
+    const rightProfitable = optsB.filter(o => Number(o.odds) >= needRight);
 
-    const leftProfitable = optsA.filter(o =>
-      (!allowed || allowed.has(cleanAgencyName(o.agency))) &&
-      Number(o.odds) >= needLeft
-    );
-    const rightProfitable = optsB.filter(o =>
-      (!allowed || allowed.has(cleanAgencyName(o.agency))) &&
-      Number(o.odds) >= needRight
-    );
+    const leftOthers  = leftProfitable.filter(o => o.agency !== aName).length;
+    const rightOthers = rightProfitable.filter(o => o.agency !== bName).length;
 
-    const leftOthers = Math.max(
-      0,
-      leftProfitable.length - (leftProfitable.some(o => cleanAgencyName(o.agency) === aName) ? 1 : 0)
-    );
-    const rightOthers = Math.max(
-      0,
-      rightProfitable.length - (rightProfitable.some(o => cleanAgencyName(o.agency) === bName) ? 1 : 0)
-    );
+    const leftLabel  = leftOthers  > 0
+      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="left">+${leftOthers} other profitable bookies</button>`
+      : '';
+    const rightLabel = rightOthers > 0
+      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="right">+${rightOthers} other profitable bookies</button>`
+      : '';
 
     const chip = (agency, odds) => `
       <div class="bookie-chip">
@@ -1052,14 +1050,6 @@ async function fetchData() {
         </div>
         <span class="bookie-odds tabular-nums">${Number(odds).toFixed(2)}</span>
       </div>`;
-
-    const leftLabel  = leftOthers  > 0
-      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="left">+${leftOthers} other profitable bookies</button>`
-      : '';
-
-    const rightLabel = rightOthers > 0
-      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="right">+${rightOthers} other profitable bookies</button>`
-      : '';
 
     const bookiesCell = `
       <div class="flex flex-col gap-2">
@@ -1073,20 +1063,25 @@ async function fetchData() {
         </div>
       </div>`;
 
+    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
+    const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
+    const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
+    const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
+
     // pack options for modal
-    const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsA, B: optsB }))));
+    const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsAAll, B: optsBAll }))));
 
     // Store calc data on the row
     tr.dataset.calc = JSON.stringify({
       aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet: headerL, bBet: headerR, optionsPacked
     });
 
-    // Save options/pair for popovers
-    tr._leftOptions  = optsA;
-    tr._rightOptions = optsB;
+    // Save lists for popovers — only profitable & filtered
+    tr._leftOptions  = leftProfitable;
+    tr._rightOptions = rightProfitable;
     tr._pairToUse    = { left: { agency: aName, odds: aOdds }, right: { agency: bName, odds: bOdds } };
 
-    // “Odds table” button in the calc column
+    // “Odds table” button
     const oddsBtn = `
       <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
@@ -1120,12 +1115,11 @@ async function fetchData() {
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
 
-    // add to fragment
     const bundle = document.createDocumentFragment();
     bundle.appendChild(tr); bundle.appendChild(trDetails);
     frag.appendChild(bundle);
 
-    // Clicking the **row** opens calculator
+    // row -> calculator
     tr.addEventListener('click', (e) => {
       if (e.target.closest('.toggle-odds') || e.target.closest('.side-list-btn')) return;
       const payload = JSON.parse(tr.dataset.calc || '{}');
@@ -1146,7 +1140,7 @@ async function fetchData() {
       });
     });
 
-    // Clicking the **button** toggles odds table
+    // toggle odds table
     tr.querySelector('.toggle-odds').addEventListener('click', (e) => {
       e.stopPropagation();
       trDetails.classList.toggle('hidden');
@@ -1156,7 +1150,7 @@ async function fetchData() {
       }
     });
 
-    // Side list popovers (delegate)
+    // side popovers — now only profitable options are shown
     tr.addEventListener('click', (e) => {
       const btn = e.target.closest('.side-list-btn');
       if (!btn) return;
@@ -1164,11 +1158,10 @@ async function fetchData() {
       const side = btn.getAttribute('data-side'); // 'left' | 'right'
       const options = side === 'left' ? tr._leftOptions : tr._rightOptions;
       if (!options || !options.length) return;
-      openSideListPopover(btn, side, options);
+      openSideListPopover(btn, side, options); // shows only the profitable, filtered list
     });
   }
 
-  els.tbody.innerHTML = '';
   els.tbody.appendChild(frag);
   renderSortIndicators();
 }
