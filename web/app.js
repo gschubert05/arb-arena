@@ -1060,7 +1060,11 @@ async function fetchData() {
         </div>
       </div>`;
 
-    const roiPct = ((Number(it.roi) || 0) * 100).toFixed(2) + '%';
+    // ROI recomputed from the chosen pair (respecting current bookie filters)
+    const roiLocal = roiFromOdds(aOdds, bOdds);   // ROI = 1/(1/a + 1/b) - 1
+    const roiPct   = (roiLocal > -Infinity ? (roiLocal * 100).toFixed(2) : '0.00') + '%';
+    tr.dataset.roi = String(roiLocal); // (optional) handy if you later want client-side sorting
+
     const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
     const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
