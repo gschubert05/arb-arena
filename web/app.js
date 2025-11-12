@@ -1,7 +1,7 @@
 // --- Theme toggle ---
 
 // ==== DIAGNOSTIC BANNER ====
-console.log("ARB app.js build 2025-11-12-05");
+console.log("ARB app.js build 2025-11-12-08");
 
 (() => {
   const root = document.documentElement;
@@ -976,7 +976,7 @@ async function fetchData() {
 
   // Rows
   els.tbody.innerHTML = '';
-  const rowBundles = []; // collect rows so we can client-sort by recomputed ROI
+  const bundles = []; // <- collect rows so we can sort by recomputed ROI if needed
 
   for (const it of items) {
     const tr = document.createElement('tr');
@@ -987,72 +987,100 @@ async function fetchData() {
     const leagueCell = it.league || '—';
 
     // Build option arrays from full table
-    let optsA = [], optsB = [];
+    let optsAAll = [], optsBAll = [];
     if (it.book_table?.rows?.length) {
       const rows = it.book_table.rows;
-      optsA = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  })).filter(o=>o.agency && o.odds>0);
-      optsB = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) })).filter(o=>o.agency && o.odds>0);
+      optsAAll = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.left)  }))
+                     .filter(o => o.agency && o.odds > 1);
+      optsBAll = rows.map(r => ({ agency: cleanAgencyName(r.agency||''), odds: Number(r.right) }))
+                     .filter(o => o.agency && o.odds > 1);
     }
 
-    // Best profitable pair within current bookie filters (ANY within filters)
+    // Apply bookie filter to BOTH sides
     const selected = state.selectedBookies;
     const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
-    const pair = bestPairWithin(optsA, optsB, allowed, allowed);
+    const optsA = allowed ? optsAAll.filter(o => allowed.has(o.agency)) : optsAAll;
+    const optsB = allowed ? optsBAll.filter(o => allowed.has(o.agency)) : optsBAll;
 
-    // Hide row if no profitable pair within filters
-    if (!pair) continue;
+    // Find best profitable pair within the filtered sets
+    let best = null;
+    for (const a of optsA) {
+      const ao = Number(a.odds); if (!(ao > 1)) continue;
+      for (const b of optsB) {
+        const bo = Number(b.odds); if (!(bo > 1)) continue;
+        const roi = roiFromOdds(ao, bo); // 1/(1/a+1/b) - 1
+        if (roi > 0 && (!best || roi > best.roi)) best = { left: a, right: b, roi };
+      }
+    }
+    if (!best) continue; // hide row if no profitable pair within selected bookies
 
-    // Counts for tiny footer under each chip
-    const leftCount  = countProfitableOnLeft(optsA,  pair.right.odds, allowed);
-    const rightCount = countProfitableOnRight(optsB, pair.left.odds,  allowed);
-    const leftExtra  = leftCount  > 1 ? `+${leftCount - 1} other profitable bookie${leftCount-1>1?'s':''}` : '';
-    const rightExtra = rightCount > 1 ? `+${rightCount - 1} other profitable bookie${rightCount-1>1?'s':''}` : '';
+    // Calculator data (use the chosen filtered pair)
+    const aName = best.left.agency;
+    const bName = best.right.agency;
+    const aOdds = Number(best.left.odds);
+    const bOdds = Number(best.right.odds);
+    const aLogo = logoFor(aName);
+    const bLogo = logoFor(bName);
 
-    const chip = (agency, odds, extraText) => `
+    // Profitable alternatives (ONLY within selected bookies)
+    const needLeft  = requiredLeftOdds(bOdds);
+    const needRight = requiredRightOdds(aOdds);
+    const leftProfitable  = optsA.filter(o => Number(o.odds) >= needLeft);
+    const rightProfitable = optsB.filter(o => Number(o.odds) >= needRight);
+    const leftOthers  = leftProfitable.filter(o => o.agency !== aName).length;
+    const rightOthers = rightProfitable.filter(o => o.agency !== bName).length;
+
+    const leftLabel  = leftOthers  > 0
+      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="left">+${leftOthers} other profitable bookie${leftOthers>1?'s':''}</button>`
+      : '';
+    const rightLabel = rightOthers > 0
+      ? `<button class="side-list-btn mt-1 text-[11px] text-slate-500 dark:text-slate-400 underline underline-offset-2" data-side="right">+${rightOthers} other profitable bookie${rightOthers>1?'s':''}</button>`
+      : '';
+
+    const chip = (agency, odds) => `
       <div class="bookie-chip">
         <div class="bookie-identity min-w-0">
           <img src="${logoFor(agency)}" alt="${agency}" onerror="this.src='/logos/placeholder.jpeg'">
           <span class="bookie-name truncate">${agency}</span>
         </div>
         <span class="bookie-odds tabular-nums">${Number(odds).toFixed(2)}</span>
-        ${extraText ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">${extraText}</div>` : ``}
       </div>`;
 
     const bookiesCell = `
       <div class="flex flex-col gap-2">
-        ${chip(pair.left.agency,  pair.left.odds,  leftExtra)}
-        ${chip(pair.right.agency, pair.right.odds, rightExtra)}
+        <div>
+          ${chip(aName, aOdds)}
+          ${leftLabel}
+        </div>
+        <div>
+          ${chip(bName, bOdds)}
+          ${rightLabel}
+        </div>
       </div>`;
 
-    // Recompute ROI for the chosen (filtered) pair
-    const aName = cleanAgencyName(pair.left.agency);
-    const bName = cleanAgencyName(pair.right.agency);
-    const aOdds = Number(pair.left.odds) || 0;
-    const bOdds = Number(pair.right.odds) || 0;
-    const roiLocal = roiFromOdds(aOdds, bOdds);           // 1/(1/a+1/b)-1
+    // Recomputed ROI for chosen (filtered) pair
+    const roiLocal = roiFromOdds(aOdds, bOdds);
     const roiPct   = (roiLocal * 100).toFixed(2) + '%';
-    tr.dataset.roi = String(roiLocal);                    // used for client-side sort
-
-    const aLogo = logoFor(aName);
-    const bLogo = logoFor(bName);
+    tr.dataset.roi = String(roiLocal);
 
     const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
     const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
 
     // pack options for modal
-    const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({A:optsA, B:optsB}))));
+    const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsAAll, B: optsBAll }))));
 
     // Store calc data on the row
     tr.dataset.calc = JSON.stringify({
-      aName,bName,aOdds,bOdds,aLogo,bLogo,title,aBet:headerL,bBet:headerR,optionsPacked
+      aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet: headerL, bBet: headerR, optionsPacked
     });
 
-    // Save options/pair for popovers (if you use them elsewhere)
-    tr._leftOptions  = optsA;
-    tr._rightOptions = optsB;
-    tr._pairToUse    = { left:{ agency:aName, odds:aOdds }, right:{ agency:bName, odds:bOdds } };
+    // Save lists for popovers
+    tr._leftOptions  = leftProfitable;
+    tr._rightOptions = rightProfitable;
+    tr._pairToUse    = { left: { agency: aName, odds: aOdds }, right: { agency: bName, odds: bOdds } };
 
+    // “Odds table” button
     const oddsBtn = `
       <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
@@ -1086,11 +1114,11 @@ async function fetchData() {
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
 
-    // click handlers
+    // handlers
     tr.addEventListener('click', (e) => {
-      if (e.target.closest('.toggle-odds')) return;
+      if (e.target.closest('.toggle-odds') || e.target.closest('.side-list-btn')) return;
       const payload = JSON.parse(tr.dataset.calc || '{}');
-      let optionsA=[], optionsB=[];
+      let optionsA = [], optionsB = [];
       try {
         if (payload.optionsPacked) {
           const decoded = JSON.parse(decodeURIComponent(escape(atob(payload.optionsPacked))));
@@ -1116,23 +1144,32 @@ async function fetchData() {
       }
     });
 
-    // collect bundle (we'll append after optional sort)
-    rowBundles.push({ tr, trDetails, roi: roiLocal });
+    tr.addEventListener('click', (e) => {
+      const btn = e.target.closest('.side-list-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      const side = btn.getAttribute('data-side');
+      const options = side === 'left' ? tr._leftOptions : tr._rightOptions;
+      if (!options || !options.length) return;
+      openSideListPopover(btn, side, options);
+    });
+
+    // store bundle for optional client-side sorting
+    bundles.push({ tr, trDetails, roi: roiLocal });
   }
 
-  // If sorting by ROI, re-order client-side based on recomputed ROI
+  // ---------- NEW: client-side resort by recomputed ROI ----------
+  let frag = document.createDocumentFragment();
   if (state.sortBy === 'roi') {
-    rowBundles.sort((a, b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
+    bundles.sort((a, b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
   }
-
-  // append to DOM
-  const frag = document.createDocumentFragment();
-  for (const { tr, trDetails } of rowBundles) {
+  for (const { tr, trDetails } of bundles) {
     frag.appendChild(tr);
     frag.appendChild(trDetails);
   }
-  els.tbody.appendChild(frag);
+  // ---------------------------------------------------------------
 
+  els.tbody.appendChild(frag);
   renderSortIndicators();
 }
 
