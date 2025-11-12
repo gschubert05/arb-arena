@@ -746,7 +746,6 @@ function isInteractive(el) {
 function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
   wrapEl.innerHTML = '';
 
-  // Treat "Select all" as all-checked when no manual picks, same as before
   const treatAllSelected =
     (selectAllEl.checked === true) &&
     (selectedSet.size === 0 || selectedSet.size >= items.length);
@@ -755,18 +754,19 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
     const id = `${allKey}-${v.toString().replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
 
-    // Row container
     const row = document.createElement('label');
-    row.className = "inline-flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 w-full";
-    // If this is the BOOKIES panel, prepend the logo
+    // tighter gap for tiny icons
+    row.className = "inline-flex items-center gap-1 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 w-full";
+
     if (allKey === 'bookie') {
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
-        <img src="${logoFor(v)}" alt="" class="w-4 h-4 rounded shrink-0" onerror="this.src='/logos/placeholder.jpeg'">
-        <span class="truncate">${v}</span>
+        <img src="${logoFor(v)}" alt="" class="w-3 h-3 rounded-sm shrink-0" onerror="this.src='/logos/placeholder.jpeg'">
+        <span class="truncate text-sm">${v}</span>
       `;
+      // If you want exact pixel control regardless of Tailwind base size, uncomment:
+      // row.querySelector('img').style.cssText = 'width:12px;height:12px';
     } else {
-      // Sports / Leagues unchanged
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
         <span class="truncate">${v}</span>
@@ -777,34 +777,18 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
 
   selectAllEl.checked = treatAllSelected;
 
-  // Wire item checkboxes
   wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const val = cb.getAttribute('data-val');
-
-      // If "Select all" was on and user starts toggling, initialize set with all then mutate
-      if (selectAllEl.checked === true && selectedSet.size === 0) {
-        items.forEach(v => selectedSet.add(v));
-      }
-
+      if (selectAllEl.checked === true && selectedSet.size === 0) items.forEach(v => selectedSet.add(v));
       if (cb.checked) selectedSet.add(val); else selectedSet.delete(val);
-
-      // If everything is selected, collapse back to "all" (empty set means all)
-      if (selectedSet.size >= items.length) {
-        selectedSet.clear();
-        selectAllEl.checked = true;
-      } else {
-        selectAllEl.checked = false;
-      }
-
+      if (selectedSet.size >= items.length) { selectedSet.clear(); selectAllEl.checked = true; } else selectAllEl.checked = false;
       onChange();
     });
   });
 
-  // Wire "Select all"
   selectAllEl.onchange = () => {
     if (selectAllEl.checked) {
-      // Represent "all" by an empty set to keep URL params short
       selectedSet.clear();
       wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
     } else {
