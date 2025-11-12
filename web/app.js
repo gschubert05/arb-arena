@@ -1,7 +1,7 @@
 // --- Theme toggle ---
 
 // ==== DIAGNOSTIC BANNER ====
-console.log("ARB app.js build 2025-11-12-08");
+console.log("ARB app.js build 2025-11-12-09");
 
 (() => {
   const root = document.documentElement;
@@ -906,18 +906,27 @@ function openSideListPopover(anchorEl, side, options) {
 async function fetchData() {
   if (els.tzSelect) els.tzSelect.value = state.tz;
 
-  const res = await fetch(`/api/opportunities?${qs()}`);
-  const { items, total, page, pages, lastUpdated, sports, leagues, agencies } = await res.json();
+  // helper to rebuild the API URL with a page override
+  const buildURL = (pageOverride) => {
+    const params = new URLSearchParams(qs()); // reuse your qs()
+    if (pageOverride != null) params.set('page', String(pageOverride));
+    return `/api/opportunities?${params.toString()}`;
+  };
 
-  // meta
+  // First request (always needed for metadata like pages)
+  const firstRes = await fetch(buildURL(state.page));
+  const firstJson = await firstRes.json();
+  let { items, total, page, pages, lastUpdated, sports, leagues, agencies } = firstJson;
+
+  // meta (will be overridden later if we do client-side filtering/pagination)
   els.lastUpdated.textContent = lastUpdated ? fmtWithTZ(lastUpdated) : '—';
-  els.totalCount.textContent = total;
-  els.page.textContent = page;
-  els.pages.textContent = pages;
-  els.prev.disabled = page <= 1;
-  els.next.disabled = page >= pages;
+  els.totalCount.textContent  = total;
+  els.page.textContent        = page;
+  els.pages.textContent       = pages;
+  els.prev.disabled           = page <= 1;
+  els.next.disabled           = page >= pages;
 
-  // Sports
+  // ---------- filters panels (unchanged) ----------
   const spNow = JSON.stringify(sports || []);
   const spPrev = JSON.stringify(state._sports || []);
   if (spNow !== spPrev) {
@@ -936,7 +945,6 @@ async function fetchData() {
   updateSummaryText(state.selectedSports, state._sports, els.sportsSummary, 'All sports');
   updateSummaryText(state.selectedSports, state._sports, els.sportsSelectedCount, 'All');
 
-  // Leagues
   const lgNow = JSON.stringify(leagues || []);
   const lgPrev = JSON.stringify(state._leagues || []);
   if (lgNow !== lgPrev) {
@@ -955,7 +963,6 @@ async function fetchData() {
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSummary, 'All leagues');
   updateSummaryText(state.selectedLeagues, state._leagues, els.leaguesSelectedCount, 'All');
 
-  // Bookies
   const agNow = JSON.stringify(agencies || []);
   const agPrev = JSON.stringify(state._agencies || []);
   if (agNow !== agPrev) {
@@ -974,11 +981,8 @@ async function fetchData() {
   updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSummary, 'All bookies');
   updateSummaryText(state.selectedBookies, state._agencies, els.bookiesSelectedCount, 'All');
 
-  // Rows
-  els.tbody.innerHTML = '';
-  const bundles = []; // <- collect rows so we can sort by recomputed ROI if needed
-
-  for (const it of items) {
+  // -------- core row building util (returns {bundle|null, roi} ) --------
+  function buildBundle(it, allowed) {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50';
 
@@ -996,33 +1000,28 @@ async function fetchData() {
                      .filter(o => o.agency && o.odds > 1);
     }
 
-    // Apply bookie filter to BOTH sides
-    const selected = state.selectedBookies;
-    const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
+    // Apply bookie filter (if any)
     const optsA = allowed ? optsAAll.filter(o => allowed.has(o.agency)) : optsAAll;
     const optsB = allowed ? optsBAll.filter(o => allowed.has(o.agency)) : optsBAll;
 
-    // Find best profitable pair within the filtered sets
+    // Best profitable pair within filtered sets
     let best = null;
     for (const a of optsA) {
       const ao = Number(a.odds); if (!(ao > 1)) continue;
       for (const b of optsB) {
         const bo = Number(b.odds); if (!(bo > 1)) continue;
-        const roi = roiFromOdds(ao, bo); // 1/(1/a+1/b) - 1
+        const roi = roiFromOdds(ao, bo);
         if (roi > 0 && (!best || roi > best.roi)) best = { left: a, right: b, roi };
       }
     }
-    if (!best) continue; // hide row if no profitable pair within selected bookies
+    if (!best) return null; // not profitable given allowed bookies
 
-    // Calculator data (use the chosen filtered pair)
-    const aName = best.left.agency;
-    const bName = best.right.agency;
-    const aOdds = Number(best.left.odds);
-    const bOdds = Number(best.right.odds);
-    const aLogo = logoFor(aName);
-    const bLogo = logoFor(bName);
+    // Chosen pair
+    const aName = best.left.agency, bName = best.right.agency;
+    const aOdds = Number(best.left.odds), bOdds = Number(best.right.odds);
+    const aLogo = logoFor(aName), bLogo = logoFor(bName);
 
-    // Profitable alternatives (ONLY within selected bookies)
+    // Profitable alternatives (only within allowed)
     const needLeft  = requiredLeftOdds(bOdds);
     const needRight = requiredRightOdds(aOdds);
     const leftProfitable  = optsA.filter(o => Number(o.odds) >= needLeft);
@@ -1058,36 +1057,14 @@ async function fetchData() {
         </div>
       </div>`;
 
-    // Recomputed ROI for chosen (filtered) pair
-    const roiLocal = roiFromOdds(aOdds, bOdds);
+    const roiLocal = best.roi;
     const roiPct   = (roiLocal * 100).toFixed(2) + '%';
     tr.dataset.roi = String(roiLocal);
 
     const title = `${it.game || ''} — ${it.market || ''}`.replace(/"/g, '&quot;');
     const headerL = it.book_table?.headers?.[1] || bets.top || 'Left';
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
-
-    // pack options for modal
     const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsAAll, B: optsBAll }))));
-
-    // Store calc data on the row
-    tr.dataset.calc = JSON.stringify({
-      aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet: headerL, bBet: headerR, optionsPacked
-    });
-
-    // Save lists for popovers
-    tr._leftOptions  = leftProfitable;
-    tr._rightOptions = rightProfitable;
-    tr._pairToUse    = { left: { agency: aName, odds: aOdds }, right: { agency: bName, odds: bOdds } };
-
-    // “Odds table” button
-    const oddsBtn = `
-      <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
-          <path d="M8 7h8M7 11h10M7 15h10M7 19h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </button>`;
 
     tr.innerHTML = `
       <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
@@ -1103,10 +1080,16 @@ async function fetchData() {
         </div>
       </td>
       <td class="px-4 py-3">${bookiesCell}</td>
-      <td class="px-2 py-3 text-center">${oddsBtn}</td>
+      <td class="px-2 py-3 text-center">
+        <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 7h8M7 11h10M7 15h10M7 19h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </td>
     `;
 
-    // details row
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
@@ -1114,16 +1097,17 @@ async function fetchData() {
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
 
-    // handlers
+    // Handlers
     tr.addEventListener('click', (e) => {
       if (e.target.closest('.toggle-odds') || e.target.closest('.side-list-btn')) return;
-      const payload = JSON.parse(tr.dataset.calc || '{}');
+      const payload = {
+        aName: aName, bName: bName, aOdds, bOdds,
+        aLogo, bLogo, title, aBet: headerL, bBet: headerR, optionsPacked
+      };
       let optionsA = [], optionsB = [];
       try {
-        if (payload.optionsPacked) {
-          const decoded = JSON.parse(decodeURIComponent(escape(atob(payload.optionsPacked))));
-          optionsA = decoded.A || []; optionsB = decoded.B || [];
-        }
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(payload.optionsPacked))));
+        optionsA = decoded.A || []; optionsB = decoded.B || [];
       } catch {}
       Calc.openCalc({
         aName: payload.aName, bName: payload.bName,
@@ -1149,26 +1133,84 @@ async function fetchData() {
       if (!btn) return;
       e.stopPropagation();
       const side = btn.getAttribute('data-side');
-      const options = side === 'left' ? tr._leftOptions : tr._rightOptions;
+      const options = side === 'left' ? leftProfitable : rightProfitable;
       if (!options || !options.length) return;
       openSideListPopover(btn, side, options);
     });
 
-    // store bundle for optional client-side sorting
-    bundles.push({ tr, trDetails, roi: roiLocal });
+    // bundle (for later sorting/paging)
+    const bundle = { tr, trDetails, roi: roiLocal };
+    return bundle;
   }
 
-  // ---------- NEW: client-side resort by recomputed ROI ----------
-  let frag = document.createDocumentFragment();
+  // ---------- Build rows ----------
+  els.tbody.innerHTML = '';
+  const selected = state.selectedBookies;
+  const allowed = (selected && selected.size) ? new Set([...selected].map(cleanAgencyName)) : null;
+
+  // If NO bookie filter: build only current page (server pagination)
+  if (!allowed) {
+    const bundles = [];
+    for (const it of items) {
+      const b = buildBundle(it, null);
+      if (b) bundles.push(b);
+    }
+    // optional: client-side resort when sorting by ROI using recomputed roi
+    if (state.sortBy === 'roi') {
+      bundles.sort((a,b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
+    }
+    const frag = document.createDocumentFragment();
+    for (const { tr, trDetails } of bundles) { frag.appendChild(tr); frag.appendChild(trDetails); }
+    els.tbody.appendChild(frag);
+    renderSortIndicators();
+    return;
+  }
+
+  // WITH bookie filter: fetch ALL pages, then client-filter + client-paginate
+  const allBundles = [];
+  // include the first page we already have
+  for (const it of items) {
+    const b = buildBundle(it, allowed);
+    if (b) allBundles.push(b);
+  }
+  // pull remaining pages
+  for (let p = 1; p <= pages; p++) {
+    if (p === page) continue;
+    const r = await fetch(buildURL(p));
+    const j = await r.json();
+    for (const it of (j.items || [])) {
+      const b = buildBundle(it, allowed);
+      if (b) allBundles.push(b);
+    }
+  }
+
+  // Sort if sorting by ROI (recomputed)
   if (state.sortBy === 'roi') {
-    bundles.sort((a, b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
+    allBundles.sort((a,b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
   }
-  for (const { tr, trDetails } of bundles) {
-    frag.appendChild(tr);
-    frag.appendChild(trDetails);
-  }
-  // ---------------------------------------------------------------
 
+  // Client totals + pagination
+  const clientTotal = allBundles.length;
+  const pageSize    = state.pageSize;
+  const clientPages = Math.max(1, Math.ceil(clientTotal / pageSize));
+
+  // Clamp state.page if out of range after filtering
+  if (state.page > clientPages) state.page = clientPages;
+
+  // Update UI counters to filtered values
+  els.totalCount.textContent = clientTotal;
+  els.pages.textContent      = clientPages;
+  els.page.textContent       = state.page;
+  els.prev.disabled          = state.page <= 1;
+  els.next.disabled          = state.page >= clientPages;
+
+  // Slice current page
+  const start = (state.page - 1) * pageSize;
+  const end   = start + pageSize;
+  const slice = allBundles.slice(start, end);
+
+  const frag = document.createDocumentFragment();
+  for (const { tr, trDetails } of slice) { frag.appendChild(tr); frag.appendChild(trDetails); }
   els.tbody.appendChild(frag);
   renderSortIndicators();
 }
