@@ -179,7 +179,7 @@ const els = {
   tzSelect: document.getElementById('tzSelect'),
 };
 
-// --- Utility: Querystring builder ---
+// --- Utility: Querystring builder (client-only bookie filtering) ---
 function qs() {
   const params = {
     page: state.page,
@@ -188,13 +188,17 @@ function qs() {
     sortDir: state.sortDir,
     ...state.filters,
   };
+
+  // Do NOT send bookies to API anymore – we'll filter bookies entirely client-side
   const addCsv = (set, fullArr, key) => {
     if (!fullArr.length) return;
     if (set.size > 0 && set.size < fullArr.length) params[key] = [...set].join(',');
   };
-  addCsv(state.selectedBookies, state._agencies, 'bookies');
-  addCsv(state.selectedSports, state._sports, 'sports');
-  addCsv(state.selectedLeagues, state._leagues, 'leagues');
+
+  // keep these server-side
+  addCsv(state.selectedSports,  state._sports,   'sports');
+  addCsv(state.selectedLeagues, state._leagues,  'leagues');
+
   return new URLSearchParams(params).toString();
 }
 
