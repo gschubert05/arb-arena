@@ -17,118 +17,58 @@ console.log("ARB app.js build 2025-11-12-05");
   });
 })();
 
-(() => {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* Force tiny icons in the Bookies dropdown */
-    #bookiesPanel label .bk-ico { 
-      width:14px; height:14px; display:inline-flex; 
-      align-items:center; justify-content:center; 
-      flex:0 0 auto; margin-left:4px;
-    }
-    #bookiesPanel label .bk-ico img {
-      width:14px !important; height:14px !important; 
-      object-fit: contain; border-radius:3px;
-    }
-    /* Keep rows compact */
-    #bookiesPanel label { gap:6px !important; padding:6px 8px !important; }
-  `;
-  document.head.appendChild(style);
-})();
-
-// --- Global overflow/width clamp (prevent horizontal scrollbar) ---
-/*(() => {
-  const style = document.createElement('style');
-  style.textContent = `
-    html, body { max-width: 100%; overflow-x: hidden; }
-    table { width: 100%; table-layout: fixed; }
-    thead th, tbody td { word-wrap: break-word; overflow-wrap: anywhere; }
-    .bookie-chip, .bookie-identity { min-width: 0; }
-    .bookie-name { display:inline-block; max-width: 100%; }
-    td svg { max-width: 100%; height: auto; }
-  `;
-  document.head.appendChild(style);
-})();*/
-
-// --- Calculator styles (single, consolidated) ---
+// ONE consolidated style injection
 (() => {
   const css = `
-  /* Card */
-  .calc-card{
-    position:relative;
-    display:grid;
-    grid-template-columns:1fr auto;
-    align-items:center;
-    gap:16px;
-    border:1px solid rgb(226 232 240/1);
-    border-radius:16px;
-    padding:16px;
-    background:var(--calc-bg,#fff);
-    cursor:pointer; /* whole card clickable to open dropdown */
-  }
-  .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
+    /* --- Bookies dropdown: compact icons + checkbox spacing --- */
+    .bookie-icon-16 { width:18px; height:18px; border-radius:4px; flex:none; }
+    .chk-input { margin-right:.5rem; } /* keeps space between checkbox and label text */
 
-  /* Left column (logo/name + bet + payout) */
-  .calc-left{display:flex;flex-direction:column;gap:6px;min-width:0}
-  .calc-top{display:flex;align-items:center;gap:.6rem}
-  .calc-id img{width:22px;height:22px;border-radius:6px;flex:none}
-  .calc-id .name{font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-  /* Right column (odds above stake) */
-  .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-  .calc-odds{font-variant-numeric:tabular-nums;opacity:.9;font-weight:600}
-  .calc-stake{display:flex;align-items:center;gap:.5rem}
-  .calc-stake input{
-    width:128px;
-    padding:.45rem .6rem;
-    border:1px solid rgb(203 213 225/1);
-    border-radius:10px;
-    background:var(--calc-bg,#fff);
-    font-size:.95rem;
-  }
-  .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
-  .calc-copy{font-size:.78rem;padding:.4rem .6rem;border-radius:8px;background:rgb(241 245 249/1);cursor:pointer}
-  .dark .calc-copy{background:rgb(30 41 59/1)}
-
-  /* Meta text */
-  .calc-meta{font-size:.90rem;color:rgb(100 116 139/1)}
-  .dark .calc-meta{color:rgb(148 163 184/1)}
-
-  /* Controls (spacing above headings) */
-  .calc-controls > div > label{margin-top:12px}
-  .calc-controls label{font-size:.95rem}
-
-  /* Summary divider & pills */
-  .calc-summary{
-    border-top:1px solid rgb(226 232 240/1);
-    margin-top:18px;
-    padding-top:14px;
-    display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
-  }
-  .dark .calc-summary{border-color:rgb(51 65 85/1)}
-  .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .6rem;border-radius:999px;background:rgb(241 245 249/1)}
-  .dark .pill{background:rgb(30 41 59/1)}
-  .pill b{font-variant-numeric:tabular-nums}
-
-  /* Dropdown of bookies inside calc */
-  .calc-dd{
-    position:absolute; right:16px; top:100%; margin-top:8px;
-    min-width:280px; max-height:280px; overflow:auto;
-    background:var(--calc-bg,#fff);
-    border:1px solid rgb(226 232 240/1); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.25);
-    z-index:2147483647;
-  }
-  .dark .calc-dd{background:rgb(15 23 42/1);border-color:rgb(51 65 85/1)}
-  .calc-dd .opt{
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:10px 12px; cursor:pointer;
-  }
-  .calc-dd .opt:hover{background:rgb(241 245 249/1)}
-  .dark .calc-dd .opt:hover{background:rgb(30 41 59/1)}
-  .calc-dd .left{display:flex;align-items:center;gap:8px;min-width:0}
-  .calc-dd img{width:18px;height:18px;border-radius:4px;flex:none}
-  .calc-dd .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .calc-dd .odds{font-variant-numeric:tabular-nums;opacity:.9}
+    /* --- Calculator styles (unchanged) --- */
+    .calc-card{
+      position:relative; display:grid; grid-template-columns:1fr auto; align-items:center; gap:16px;
+      border:1px solid rgb(226 232 240/1); border-radius:16px; padding:16px; background:var(--calc-bg,#fff); cursor:pointer;
+    }
+    .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
+    .calc-left{display:flex;flex-direction:column;gap:6px;min-width:0}
+    .calc-top{display:flex;align-items:center;gap:.6rem}
+    .calc-id img{width:22px;height:22px;border-radius:6px;flex:none}
+    .calc-id .name{font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+    .calc-odds{font-variant-numeric:tabular-nums;opacity:.9;font-weight:600}
+    .calc-stake{display:flex;align-items:center;gap:.5rem}
+    .calc-stake input{
+      width:128px; padding:.45rem .6rem; border:1px solid rgb(203 213 225/1); border-radius:10px;
+      background:var(--calc-bg,#fff); font-size:.95rem;
+    }
+    .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
+    .calc-copy{font-size:.78rem;padding:.4rem .6rem;border-radius:8px;background:rgb(241 245 249/1);cursor:pointer}
+    .dark .calc-copy{background:rgb(30 41 59/1)}
+    .calc-meta{font-size:.90rem;color:rgb(100 116 139/1)}
+    .dark .calc-meta{color:rgb(148 163 184/1)}
+    .calc-controls > div > label{margin-top:12px}
+    .calc-controls label{font-size:.95rem}
+    .calc-summary{
+      border-top:1px solid rgb(226 232 240/1); margin-top:18px; padding-top:14px;
+      display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+    }
+    .dark .calc-summary{border-color:rgb(51 65 85/1)}
+    .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .6rem;border-radius:999px;background:rgb(241 245 249/1)}
+    .dark .pill{background:rgb(30 41 59/1)}
+    .pill b{font-variant-numeric:tabular-nums}
+    .calc-dd{
+      position:absolute; right:16px; top:100%; margin-top:8px; min-width:280px; max-height:280px; overflow:auto;
+      background:var(--calc-bg,#fff); border:1px solid rgb(226 232 240/1); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.25);
+      z-index:2147483647;
+    }
+    .dark .calc-dd{background:rgb(15 23 42/1);border-color:rgb(51 65 85/1)}
+    .calc-dd .opt{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; cursor:pointer;}
+    .calc-dd .opt:hover{background:rgb(241 245 249/1)}
+    .dark .calc-dd .opt:hover{background:rgb(30 41 59/1)}
+    .calc-dd .left{display:flex;align-items:center;gap:8px;min-width:0}
+    .calc-dd img{width:18px;height:18px;border-radius:4px;flex:none}
+    .calc-dd .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .calc-dd .odds{font-variant-numeric:tabular-nums;opacity:.9}
   `;
   const style = document.createElement('style');
   style.textContent = css;
@@ -765,51 +705,63 @@ function isInteractive(el) {
 function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
   wrapEl.innerHTML = '';
 
-  const treatAllSelected =
-    (selectAllEl.checked === true) &&
-    (selectedSet.size === 0 || selectedSet.size >= items.length);
+  // treat "All" as selected (empty set) when Select all is on or everything is selected
+  const treatAllSelected = (selectAllEl.checked === true) && (selectedSet.size === 0 || selectedSet.size >= items.length);
 
   items.forEach(v => {
     const id = `${allKey}-${v.toString().replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
 
     const row = document.createElement('label');
-    row.className = "inline-flex items-center p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 w-full";
-
+    row.className = "inline-flex items-center p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
+    // We’ll manage spacing via .chk-input (margin-right) so the other panels don’t get scrunched.
+    // Only Bookies rows get an icon.
     if (allKey === 'bookie') {
       row.innerHTML = `
-        <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
-        <span class="bk-ico"><img src="${logoFor(v)}" alt="" onerror="this.src='/logos/placeholder.jpeg'"></span>
-        <span class="truncate text-sm">${v}</span>
+        <input type="checkbox" id="${id}" class="rounded chk-input" ${isChecked ? 'checked' : ''} data-val="${v}">
+        <img src="${logoFor(v)}" alt="" class="bookie-icon-16" onerror="this.src='/logos/placeholder.jpeg'">
+        <span class="truncate ml-2">${v}</span>
       `;
     } else {
       row.innerHTML = `
-        <input type="checkbox" id="${id}" class="rounded" ${isChecked ? 'checked' : ''} data-val="${v}">
+        <input type="checkbox" id="${id}" class="rounded chk-input" ${isChecked ? 'checked' : ''} data-val="${v}">
         <span class="truncate">${v}</span>
       `;
     }
+
     wrapEl.appendChild(row);
   });
 
+  // reflect "Select all" visual state
   selectAllEl.checked = treatAllSelected;
 
+  // wiring for each checkbox
   wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const val = cb.getAttribute('data-val');
+      // if "select all" was visually on but set is empty, seed the set with all items first
       if (selectAllEl.checked === true && selectedSet.size === 0) items.forEach(v => selectedSet.add(v));
       if (cb.checked) selectedSet.add(val); else selectedSet.delete(val);
-      if (selectedSet.size >= items.length) { selectedSet.clear(); selectAllEl.checked = true; } else selectAllEl.checked = false;
+
+      // If everything is selected, collapse to "All"
+      if (selectedSet.size >= items.length) {
+        selectedSet.clear();
+        selectAllEl.checked = true;
+      } else {
+        selectAllEl.checked = false;
+      }
       onChange();
     });
   });
 
+  // Select all toggle
   selectAllEl.onchange = () => {
     if (selectAllEl.checked) {
       selectedSet.clear();
-      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => (cb.checked = true));
     } else {
       selectedSet.clear();
-      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => (cb.checked = false));
     }
     onChange();
   };
