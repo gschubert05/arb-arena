@@ -1,7 +1,7 @@
 // --- Theme toggle ---
 
 // ==== DIAGNOSTIC BANNER ====
-console.log("ARB app.js build 2025-11-12-01");
+console.log("ARB app.js build 2025-11-12-05");
 
 (() => {
   const root = document.documentElement;
