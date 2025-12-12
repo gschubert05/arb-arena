@@ -19,7 +19,7 @@
   <rect width="64" height="64" rx="14" ry="14" fill="url(#bgGrad)"/>
 
   <!-- Scale + center your favicon SVG inside the box -->
-  <g transform="translate(32 32) scale(0.67) translate(-32 -32)">
+  <g transform="translate(32 32) scale(0.63) translate(-32 -32)">
     <!-- Full-box shield (unchanged) -->
     <path d="M32 2l26 10v18c0 16-10 30-26 36C16 60 6 46 6 30V12L32 2z"
           fill="url(#shieldGrad)" stroke="#fff" stroke-width="3" />
