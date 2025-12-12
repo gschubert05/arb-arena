@@ -8,7 +8,7 @@
     </linearGradient>
   </defs>
 
-<g transform="translate(0,-1)" fill="#ffffff" stroke="none">
+<g transform="translate(0,-3) scale(0.98)" fill="#ffffff" stroke="none">
   <!-- Full-box shield (same as before) -->
   <path d="M32 2l26 10v18c0 16-10 30-26 36C16 60 6 46 6 30V12L32 2z"
         fill="url(#shieldGrad)" stroke="#fff" stroke-width="3" />
