@@ -2,6 +2,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import pg from 'pg';
 import compression from 'compression';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -15,6 +16,31 @@ const GH_WORKFLOW_FILE = process.env.GH_WORKFLOW_FILE || "scrape-fast.yml";
 const GH_TOKEN = process.env.GH_TOKEN || "";
 let lastManualTs = 0;
 const COOLDOWN_MS = (Number(process.env.REQUEST_COOLDOWN_SEC) || 180) * 1000;
+
+// --- Postgres pool ---
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Ensure the opportunities table exists (runs on startup)
+async function ensureSchema() {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS opportunities (
+      id          SERIAL PRIMARY KEY,
+      data        JSONB NOT NULL,
+      scraped_at  TIMESTAMPTZ DEFAULT now()
+    );
+  `;
+  try {
+    await pool.query(sql);
+    console.log('[db] ensured opportunities table exists');
+  } catch (err) {
+    console.error('[db] error ensuring schema:', err);
+  }
+}
+
+// Kick it off (no shell needed)
+ensureSchema();
 
 // --- App + paths ---
 const __filename = fileURLToPath(import.meta.url);
