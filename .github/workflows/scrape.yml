@@ -17,6 +17,7 @@ env:
   NOTIFY_BOOKIES: "sportsbet,bet365,neds,tab"
   PUBLISH_JSON_PATH: "server/data/opportunities.json"
   SEEN_KEYS_PATH: "server/data/seen_keys.json"
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
 jobs:
   scrape:

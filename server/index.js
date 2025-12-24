@@ -278,9 +278,40 @@ app.get('/api/_debug_leagues', debugLeagues); // your earlier path
 
 // --- API: opportunities ---
 app.get('/api/opportunities', async (req, res) => {
-  let data;
-  try { data = await loadData(); } catch { data = { lastUpdated: null, items: [] }; }
+  // 1) Load items from Postgres
+  let items = [];
+  let lastUpdated = null;
 
+  try {
+    const result = await pool.query('SELECT data, scraped_at FROM opportunities');
+    items = result.rows.map(r => r.data);
+
+    if (result.rows.length > 0) {
+      const latest = result.rows.reduce((max, r) => {
+        const t = r.scraped_at ? new Date(r.scraped_at).getTime() : 0;
+        return t > max ? t : max;
+      }, 0);
+      if (latest > 0) {
+        lastUpdated = new Date(latest).toISOString();
+      }
+    }
+  } catch (e) {
+    console.error('DB error loading opportunities', e);
+    return res.json({
+      ok: false,
+      lastUpdated: null,
+      total: 0,
+      page: 1,
+      pages: 1,
+      sports: [],
+      competitionIds: [],
+      leagues: [],
+      agencies: [],
+      items: []
+    });
+  }
+
+  // 2) Load active leagues (same as before)
   const active = await loadActive();
   const leagueMap = resolveLeagueMap(active);
 
@@ -289,7 +320,7 @@ app.get('/api/opportunities', async (req, res) => {
     sport = '',
     competitionIds = '',
     competitionId = '',
-    leagues = '',         // names (UI sends this now)
+    leagues = '',
     dateFrom = '',
     dateTo = '',
     minRoi = '0',
@@ -299,9 +330,6 @@ app.get('/api/opportunities', async (req, res) => {
     pageSize = '50',
     bookies = '',
   } = req.query;
-
-  const { lastUpdated } = data;
-  const items = Array.isArray(data.items) ? data.items : [];
 
   for (const it of items) {
     if (!it.dateISO && it.date) {

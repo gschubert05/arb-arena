@@ -13,6 +13,9 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+import psycopg2
+from psycopg2.extras import execute_values
+
 # === Paths & constants ===
 DATA_PATH   = os.path.join(os.path.dirname(__file__), '..', 'server', 'data', 'opportunities.json')
 TARGET_URL  = "http://odds.aussportsbetting.com/multibet"
@@ -469,6 +472,48 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
     except Exception:
         return None
 
+def save_opportunities_to_db(items: List[Dict[str, Any]]) -> None:
+    """
+    Write the current opportunities into the Postgres 'opportunities' table.
+
+    We:
+      - DROP the 'url' field (you said you don't need it in the DB)
+      - Store the rest of the object as JSONB in the 'data' column
+      - DELETE all existing rows first (simple v1: only keep latest scrape)
+    """
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        print("[db] DATABASE_URL not set, skipping DB write")
+        return
+
+    print(f"[db] writing {len(items)} items to Postgres...")
+
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+
+        # Simple v1: clear old rows, then insert fresh ones
+        cur.execute("DELETE FROM opportunities;")
+
+        rows = []
+        for it in items:
+            record = dict(it)           # copy so we don't mutate original
+            record.pop("url", None)     # drop URL; not needed in DB
+            rows.append(json.dumps(record))
+
+        if rows:
+            execute_values(
+                cur,
+                "INSERT INTO opportunities (data) VALUES %s",
+                [(r,) for r in rows],   # each row is a single JSONB value
+            )
+
+        conn.commit()
+        print(f"[db] wrote {len(rows)} rows to opportunities")
+    finally:
+        cur.close()
+        conn.close()
+
 # === Orchestrator ===
 def run_once(comp_ids: List[int]) -> Dict[str, Any]:
     driver = make_driver()
@@ -535,13 +580,18 @@ def run_once(comp_ids: List[int]) -> Dict[str, Any]:
 
     all_rows.sort(key=lambda r: r.get('roi', 0.0), reverse=True)
 
+    # NEW: write to Postgres as well
+    try:
+        save_opportunities_to_db(all_rows)
+    except Exception as e:
+        print(f"[db] error writing to Postgres: {type(e).__name__}: {e}")
+
     payload = {"lastUpdated": dt.datetime.utcnow().isoformat() + 'Z', "items": all_rows}
     os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
     with open(DATA_PATH, 'w', encoding='utf-8') as f:
         json.dump(payload, f, ensure_ascii=False)
     print(f"Wrote {len(all_rows)} rows to {DATA_PATH}")
     return payload
-
 
 if __name__ == "__main__":
     comp_ids = parse_comp_ids(os.getenv('COMP_IDS'))
