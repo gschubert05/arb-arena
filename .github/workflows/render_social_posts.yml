@@ -56,7 +56,12 @@ jobs:
         run: |
           git config user.name "arb-arena-bot"
           git config user.email "actions@users.noreply.github.com"
+
           git add server/data/social
           git diff --cached --quiet && echo "No changes to commit" && exit 0
+
           git commit -m "Render social posts"
-          git push
+
+          # Remote data branch may have moved (scraper pushing). Rebase then push.
+          git pull --rebase origin data
+          git push origin data
