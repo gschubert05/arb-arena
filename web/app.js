@@ -1,5 +1,5 @@
 // ==== DIAGNOSTIC BANNER ====
-console.log("ARB app.js build drop-in 2025-12-30");
+console.log("ARB app.js build drop-in 2025-12-30-2");
 
 // --- Theme (fixed to dark) ---
 (() => {
