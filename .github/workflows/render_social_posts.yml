@@ -22,10 +22,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install deps
+      - name: Install deps (scripts)
+        working-directory: scripts
         run: npm install
 
       - name: Install Playwright Chromium
+        working-directory: scripts
         run: npx playwright install --with-deps chromium
 
       - name: Fetch data branch (latest opportunities.json + posted_keys.json)
