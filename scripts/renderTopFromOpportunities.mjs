@@ -308,10 +308,9 @@ async function main() {
 
   const opps = safeReadJson(oppsPath);
   const items = Array.isArray(opps?.items) ? opps.items : [];
-  const lastUpdated = opps?.lastUpdated || "";
-  const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
 
-  const yearAnchor = lastUpdatedIso ? new Date(lastUpdatedIso).getUTCFullYear() : new Date().getFullYear();
+  const lastUpdatedIso = opps?.lastUpdated || opps?.last_updated || "";
+  const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
 
   const leagueMap = loadLeagueMap(activePath);
 
@@ -348,7 +347,7 @@ async function main() {
     const roiPct = toPct(item?.roi);
     if (roiPct === null) continue;
 
-    const eventDateObj = parseOpportunitiesEventDate(item?.date, yearAnchor);
+    const eventDateObj = parseOpportunitiesEventDate(item?.date);
     const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
 
     const payload = {
