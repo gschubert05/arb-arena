@@ -593,8 +593,18 @@ const Calc = (() => {
     els.Bstake.addEventListener('input', () => { setMode('lockB'); recalc(); });
 
     // snap to step on blur
-    els.Astake.addEventListener('blur', () => { els.Astake.value = String(snapToStep(clampPos(els.Astake.value), stepVal())); recalc(); });
-    els.Bstake.addEventListener('blur', () => { els.Bstake.value = String(snapToStep(clampPos(els.Bstake.value), stepVal())); recalc(); });
+    els.Astake.addEventListener('blur', () => {
+      if (mode !== 'lockA') {
+        els.Astake.value = String(snapToStep(clampPos(els.Astake.value), stepVal()));
+        recalc();
+      }
+    });
+    els.Bstake.addEventListener('blur', () => {
+      if (mode !== 'lockB') {
+        els.Bstake.value = String(snapToStep(clampPos(els.Bstake.value), stepVal()));
+        recalc();
+      }
+    });
 
     // Odds inputs: live update
     els.AoddsIn.addEventListener('input', () => {
@@ -694,43 +704,45 @@ const Calc = (() => {
     const oA = Number(ctx.oA), oB = Number(ctx.oB);
     if (!(oA > 1) || !(oB > 1)) return;
 
-    const sA = clampPos(Number(els.Astake.value));
-    const sB = clampPos(Number(els.Bstake.value));
-
-    let fixedStake = whichLocked === 'A' ? sA : sB;
-    fixedStake = snapToStep(fixedStake, step, 'nearest');
-
-    // keep the fixed side snapped too
-    if (whichLocked === 'A') els.Astake.value = String(fixedStake);
-    else els.Bstake.value = String(fixedStake);
+    // IMPORTANT: do NOT round the locked side (the one being edited)
+    const lockedEl = whichLocked === 'A' ? els.Astake : els.Bstake;
+    const lockedRaw = clampPos(Number(lockedEl.value)); // keep exactly what user typed
 
     const fixedOdds = whichLocked === 'A' ? oA : oB;
     const otherOdds = whichLocked === 'A' ? oB : oA;
 
-    const targetPayout = fixedStake * fixedOdds;
+    // Target payout based on the unrounded locked stake
+    const targetPayout = lockedRaw * fixedOdds;
     const otherRaw = otherOdds > 0 ? (targetPayout / otherOdds) : 0;
 
-    const candidates = [];
+    // Round ONLY the computed (other) side to the step
     const base = snapToStep(otherRaw, step, 'nearest');
+
+    const candidates = [];
     for (let k = -3; k <= 3; k++) {
       const stake = Math.max(0, base + k * step);
-      const payoutFixed = targetPayout;
-      const payoutOther = stake * otherOdds;
-      const total = fixedStake + stake;
-      const minP = Math.min(payoutFixed, payoutOther);
+
+      const payoutLocked = targetPayout;
+      const payoutOther  = stake * otherOdds;
+
+      const total = lockedRaw + stake;
+      const minP = Math.min(payoutLocked, payoutOther);
       const profit = minP - total;
-      const diff = Math.abs(payoutFixed - payoutOther);
-      candidates.push({ stake, total, profit, diff, minP, payoutFixed, payoutOther });
+      const diff = Math.abs(payoutLocked - payoutOther);
+
+      candidates.push({ stake, total, profit, diff, minP });
     }
 
-    // choose best: profit desc, then diff asc, then total desc
+    // best: profit desc, then diff asc, then total desc
     candidates.sort((a, b) =>
       (b.profit - a.profit) ||
       (a.diff - b.diff) ||
       (b.total - a.total)
     );
+
     const best = candidates[0];
 
+    // Write ONLY to the other side
     if (whichLocked === 'A') els.Bstake.value = String(best.stake);
     else els.Astake.value = String(best.stake);
   }
