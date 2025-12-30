@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Disclaimer — Arb Arena</title>
+  <meta name="description" content="Disclaimer for Arb Arena." />
+  <link rel="stylesheet" href="/output.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .warning{
+      border: 1px solid rgba(245,158,11,0.22);
+      background: rgba(245,158,11,0.14);
+      border-radius: 14px;
+      padding: 16px;
+      color: rgba(255,237,213,0.95);
+    }
+    .warning b{ color: #fff; }
+  </style>
+</head>
+
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <div class="nav-inner">
+        <a href="/" style="text-decoration:none;">
+          <div class="flex items-center gap-3">
+            <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
+            <div>
+              <h1 class="text-3xl font-extrabold tracking-tight" style="margin:0; font-size:22px; line-height:1.1;">Arb Arena</h1>
+              <p class="text-sm text-slate-500 dark:text-slate-400" style="margin:4px 0 0; color: rgba(148,163,184,0.95);">
+                Free live arbitrage finder
+              </p>
+            </div>
+          </div>
+        </a>
+
+        <nav class="nav-links">
+          <a class="nav-link" data-nav="home" href="/">Home</a>
+          <a class="nav-link" data-nav="about" href="/about">About</a>
+          <a class="nav-link" data-nav="disclaimer" href="/disclaimer">Disclaimer</a>
+          <a class="nav-link" data-nav="contact" href="/contact">Contact</a>
+          <a class="btn btn-primary" href="/app">Open app</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="wrap wrap-narrow">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <h2 style="margin:0;font-size:42px;font-weight:800;letter-spacing:-0.02em;">Disclaimer</h2>
+        <div class="muted" style="font-size:14px;">Last updated: <span id="pageUpdated"></span> AEST</div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <div class="prose">
+          <div class="warning">
+            <div style="font-weight:800;margin-bottom:6px;">Read this first</div>
+            <p style="margin:0;">
+              <b>Arb Arena is for informational purposes only.</b> It does not provide betting advice, financial advice, or guarantees.
+              Odds and markets can change quickly. Always verify details directly on bookmaker sites before placing any wager.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">1) No advice</div>
+            <p style="margin-top:10px;">
+              Nothing on Arb Arena should be interpreted as advice or a recommendation to place a wager.
+              You are solely responsible for your decisions and actions.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">2) Accuracy & availability</div>
+            <p style="margin-top:10px;">
+              We try to provide useful information, but we do not warrant that the Service is accurate, complete, up to date, or available.
+              Data may be delayed, incorrect, or missing. Markets may be suspended or changed by bookmakers at any time.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">3) No guarantee of profit</div>
+            <p style="margin-top:10px;">
+              Even if an opportunity appears profitable, outcomes can differ due to odds movement, stake limits, voided bets,
+              rule differences, timing delays, or human error. Arb Arena does not guarantee profitability or results of any kind.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">4) Third-party services</div>
+            <p style="margin-top:10px;">
+              The Service may reference third-party websites (including bookmakers). We do not control these third parties and are not
+              responsible for their content, availability, policies, or actions. Any interaction with third-party sites is at your own risk.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">5) Limitation of liability</div>
+            <p style="margin-top:10px;">
+              To the maximum extent permitted by law, Arb Arena is not liable for any direct or indirect loss or damage arising from
+              your use of the Service, including wagering losses, lost profits, missed opportunities, or reliance on inaccurate information.
+            </p>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">6) Contact</div>
+            <p style="margin-top:10px;">
+              Questions? Email <a href="mailto:support@arb-arena.com" style="text-decoration:underline;">support@arb-arena.com</a>.
+            </p>
+          </div>
+
+          <p style="margin-top:16px;font-size:12px;color:rgba(148,163,184,0.95);">
+            This template is provided for convenience and is not legal advice.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap wrap-narrow">
+      <div class="foot">
+        <div>
+          © <span id="y"></span> Arb Arena <span style="opacity:.5;">•</span>
+          Last updated: <span id="lastUpdated"></span> <span style="opacity:.5;">•</span> AEST
+        </div>
+
+        <div class="foot-links">
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/disclaimer">Disclaimer</a>
+          <a href="/app">Open app</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function(){
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const map = { "/":"home", "/about":"about", "/contact":"contact", "/disclaimer":"disclaimer" };
+      const key = map[path];
+      if (key) {
+        const el = document.querySelector(`[data-nav="${key}"]`);
+        if (el) el.classList.add("active");
+      }
+    })();
+
+    document.getElementById("y").textContent = new Date().getFullYear();
+    const lm = new Date(document.lastModified);
+    const fmt = new Intl.DateTimeFormat("en-AU", { timeZone:"Australia/Brisbane", day:"2-digit", month:"short", year:"numeric" });
+    const formatted = fmt.format(lm);
+    document.getElementById("lastUpdated").textContent = formatted;
+    document.getElementById("pageUpdated").textContent = formatted;
+  </script>
+</body>
+</html>

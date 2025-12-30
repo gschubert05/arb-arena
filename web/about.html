@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About — Arb Arena</title>
+  <meta name="description" content="About Arb Arena." />
+  <link rel="stylesheet" href="/output.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Nothing special needed beyond globals right now */
+  </style>
+</head>
+
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <div class="nav-inner">
+        <a href="/" style="text-decoration:none;">
+          <div class="flex items-center gap-3">
+            <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
+            <div>
+              <h1 class="text-3xl font-extrabold tracking-tight" style="margin:0; font-size: 22px; line-height:1.1;">Arb Arena</h1>
+              <p class="text-sm text-slate-500 dark:text-slate-400" style="margin:4px 0 0; color: rgba(148,163,184,0.95);">
+                Free live arbitrage finder
+              </p>
+            </div>
+          </div>
+        </a>
+
+        <nav class="nav-links">
+          <a class="nav-link" data-nav="home" href="/">Home</a>
+          <a class="nav-link" data-nav="about" href="/about">About</a>
+          <a class="nav-link" data-nav="disclaimer" href="/disclaimer">Disclaimer</a>
+          <a class="nav-link" data-nav="contact" href="/contact">Contact</a>
+          <a class="btn btn-primary" href="/app">Open app</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="wrap wrap-narrow">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <h2 style="margin:0;font-size:42px;font-weight:800;letter-spacing:-0.02em;">About</h2>
+        <div class="muted" style="font-size:14px;">Last updated: <span id="pageUpdated"></span> AEST</div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <div style="line-height:1.7;color:rgba(226,232,240,.92);">
+          <p style="margin:0 0 14px;">
+            <b style="color:white;">Arb Arena</b> is a beta arbitrage finder that surfaces potential opportunities in a clean, filterable table.
+            The goal is simple: make it faster to spot mispricings and compare both sides of an arb.
+          </p>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">Beta status</div>
+            <div style="margin-top:10px;">
+              Free while in beta. Future features may include alerts, saved filters, and a paid tier.
+            </div>
+          </div>
+
+          <div class="card-inner" style="margin-top:14px;">
+            <div style="font-weight:800;color:white;font-size:14px;">Important</div>
+            <div style="margin-top:10px;">
+              Odds can change quickly — always verify on the bookmaker site before placing any wager.
+              Arb Arena is informational only. Read the full <a href="/disclaimer" style="text-decoration:underline;">Disclaimer</a>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap wrap-narrow">
+      <div class="foot">
+        <div>
+          © <span id="y"></span> Arb Arena <span style="opacity:.5;">•</span>
+          Last updated: <span id="lastUpdated"></span> <span style="opacity:.5;">•</span> AEST
+        </div>
+        <div class="foot-links">
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/disclaimer">Disclaimer</a>
+          <a href="/app">Open app</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function(){
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const map = { "/":"home", "/about":"about", "/contact":"contact", "/disclaimer":"disclaimer" };
+      const key = map[path];
+      if (key) {
+        const el = document.querySelector(`[data-nav="${key}"]`);
+        if (el) el.classList.add("active");
+      }
+    })();
+
+    document.getElementById("y").textContent = new Date().getFullYear();
+    const lm = new Date(document.lastModified);
+    const fmt = new Intl.DateTimeFormat("en-AU", { timeZone:"Australia/Brisbane", day:"2-digit", month:"short", year:"numeric" });
+    const formatted = fmt.format(lm);
+    document.getElementById("lastUpdated").textContent = formatted;
+    document.getElementById("pageUpdated").textContent = formatted;
+  </script>
+</body>
+</html>

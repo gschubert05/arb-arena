@@ -1,0 +1,223 @@
+/* ========== Arb Arena Global Styles (self-contained) ========== */
+
+:root{
+  --bg: #0b1220;
+  --bg2:#0a1020;
+  --nav: rgba(10, 24, 48, 0.78);
+
+  --panel: rgba(255,255,255,0.06);
+  --panel2: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.10);
+
+  --text: #e5e7eb;
+  --muted:#94a3b8;
+
+  --accent:#2563eb;
+  --accent2:#3b82f6;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body{
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+
+  /* Non-repeating “infinite” background */
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 20% -10%, rgba(37,99,235,0.18), transparent 60%),
+    radial-gradient(800px 500px at 90% 10%, rgba(59,130,246,0.12), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+/* Mobile can sometimes jitter with background-attachment: fixed */
+@media (max-width: 768px){
+  body { background-attachment: scroll; }
+}
+
+a { color: inherit; }
+img { max-width: 100%; }
+
+/* Layout containers */
+.wrap{
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 18px;
+}
+.wrap-narrow{
+  max-width: 1040px;
+  margin: 0 auto;
+}
+.section{ padding: 28px 0 72px; }
+
+/* Navbar */
+.nav{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--nav);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height: 76px;
+  gap: 16px;
+}
+.nav-links{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.nav-link{
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: rgba(226,232,240,0.92);
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+.nav-link:hover{
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+}
+.nav-link.active{
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+}
+
+/* Buttons */
+.btn{
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration:none;
+  font-weight: 700;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition: background .15s ease, transform .15s ease;
+  white-space: nowrap;
+}
+.btn-primary{ background: var(--accent); color: #fff; }
+.btn-primary:hover{ background: var(--accent2); }
+.btn-ghost{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: #fff;
+}
+.btn-ghost:hover{ background: rgba(255,255,255,0.10); }
+
+/* Cards */
+.card{
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 22px;
+}
+.card-inner{
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+/* Typography helpers */
+.h1{
+  font-size: 52px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  margin: 10px 0 0;
+}
+@media (max-width: 980px){
+  .h1{ font-size: 44px; }
+}
+
+.lead{
+  margin-top: 18px;
+  font-size: 18px;
+  line-height: 1.6;
+  color: rgba(226,232,240,0.92);
+}
+.muted{ color: var(--muted); }
+.subtle{ color: rgba(226,232,240,0.82); }
+
+.prose{
+  color: rgba(226,232,240,0.92);
+  line-height: 1.75;
+}
+.prose p{ margin: 0 0 14px; }
+.prose ul{ margin: 10px 0 0; padding-left: 18px; }
+.prose li{ margin: 8px 0; }
+
+/* Simple grids */
+.grid3{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 980px){
+  .grid3{ grid-template-columns: 1fr; }
+}
+
+.grid2{
+  display:grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px){
+  .grid2{ grid-template-columns: 1fr; }
+}
+
+/* Footer */
+footer{
+  border-top: 1px solid var(--border);
+  padding: 22px 0;
+}
+.foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: rgba(226,232,240,0.80);
+}
+.foot-links{
+  display:flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.foot-links a{
+  text-decoration:none;
+  color: rgba(226,232,240,0.85);
+}
+.foot-links a:hover{
+  text-decoration: underline;
+  color: #fff;
+}
+
+/* Minimal “Tailwind-like” utilities so your logo block works even without output.css */
+.flex{ display:flex; }
+.items-center{ align-items:center; }
+.gap-3{ gap: .75rem; }
+.h-12{ height: 3rem; }
+.w-12{ width: 3rem; }
+.rounded-xl{ border-radius: .75rem; }
+.shadow-sm{ box-shadow: var(--shadow-sm); }
+.text-3xl{ font-size: 1.875rem; line-height: 2.25rem; }
+.font-extrabold{ font-weight: 800; }
+.tracking-tight{ letter-spacing: -0.02em; }
+.text-sm{ font-size: .875rem; line-height: 1.25rem; }

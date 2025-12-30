@@ -254,7 +254,36 @@ async function loadActive() {
 }
 
 // --- static web ---
-app.use(express.static(WEB_DIR, { etag: true, lastModified: true, cacheControl: false }));
+app.use(express.static(WEB_DIR, {etag: true, lastModified: true, cacheControl: false, index: false }));
+
+// --- multi-page shell (marketing + app) ---
+app.set('trust proxy', 1);
+
+const MARKETING_INDEX = path.join(WEB_DIR, 'index.html');
+const APP_INDEX = path.join(WEB_DIR, 'app.html');
+
+function wantsAppHost(req) {
+  const hostHeader = (req.headers['x-forwarded-host'] || req.headers.host || '').toString();
+  const host = hostHeader.split(',')[0].trim().split(':')[0].toLowerCase();
+  return host.startsWith('app.');
+}
+
+// Root: marketing on www/root, app on app subdomain
+app.get('/', (req, res) => {
+  return res.sendFile(wantsAppHost(req) ? APP_INDEX : MARKETING_INDEX);
+});
+
+// App route for same-domain usage (e.g., www -> /app)
+app.get('/app', (req, res) => res.sendFile(APP_INDEX));
+app.get('/app/*', (req, res) => res.sendFile(APP_INDEX));
+
+// Simple content pages
+app.get('/about', (req, res) => res.sendFile(path.join(WEB_DIR, 'about.html')));
+app.get('/contact', (req, res) => res.sendFile(path.join(WEB_DIR, 'contact.html')));
+app.get('/terms', (req, res) => res.sendFile(path.join(WEB_DIR, 'terms.html')));
+app.get('/privacy', (req, res) => res.sendFile(path.join(WEB_DIR, 'privacy.html')));
+app.get('/disclaimer', (req, res) => res.sendFile(path.join(WEB_DIR, 'disclaimer.html')));
+
 
 // --- debug route (where you tested; keep both spellings to be safe) ---
 async function debugLeagues(req, res) {
@@ -483,8 +512,12 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
   }
 });
 
-// --- SPA fallback ---
-app.get('*', (req, res) => res.sendFile(path.join(WEB_DIR, 'index.html')));
+// --- fallback ---
+app.get('*', (req, res) => {
+  // If someone hits a random path on app. subdomain, show the app.
+  // Otherwise, show the marketing homepage.
+  return res.sendFile(wantsAppHost(req) ? APP_INDEX : MARKETING_INDEX);
+});
 
 // --- start ---
 const PORT = process.env.PORT || 3000;

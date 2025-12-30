@@ -3,18 +3,9 @@
 // ==== DIAGNOSTIC BANNER ====
 console.log("ARB app.js build 2025-11-12-09");
 
+// --- Theme (fixed to dark) ---
 (() => {
-  const root = document.documentElement;
-  const saved = localStorage.getItem('theme');
-  if (saved) root.classList.toggle('dark', saved === 'dark');
-  else root.classList.add('dark');
-
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('#themeToggle');
-    if (!btn) return;
-    const isDark = root.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  });
+  document.documentElement.classList.add('dark');
 })();
 
 // ONE consolidated style injection
@@ -883,7 +874,7 @@ function openSideListPopover(anchorEl, side, options) {
       const a = side === 'left' ? { agency, odds } : other;
       const b = side === 'left' ? other : { agency, odds };
 
-      const title = `${tr.querySelector('td:nth-child(4)')?.textContent || ''} — ${tr.querySelector('td:nth-child(5)')?.textContent || ''}`;
+      const title = `${tr.dataset.game || ''} — ${tr.dataset.market || ''}`;
 
       Calc.openCalc({
         aName: a.agency, bName: b.agency,
@@ -1046,7 +1037,7 @@ async function fetchData() {
       </div>`;
 
     const bookiesCell = `
-      <div class="flex flex-col gap-2">
+      <div class="stack">
         <div>
           ${chip(aName, aOdds)}
           ${leftLabel}
@@ -1066,23 +1057,44 @@ async function fetchData() {
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
     const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsAAll, B: optsBAll }))));
 
+    
+    // keep extra info on the row for popovers + better title building
+    tr._pairToUse = best;
+    tr._leftOptions = optsAAll;
+    tr._rightOptions = optsBAll;
+    tr.dataset.game = it.game || '';
+    tr.dataset.market = it.market || '';
+
     tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap">${kickoffTxt}</td>
-      <td class="px-4 py-3 whitespace-nowrap">${it.sport || ''}</td>
-      <td class="px-4 py-3">${leagueCell}</td>
-      <td class="px-4 py-3">${it.game || ''}</td>
-      <td class="px-4 py-3">${it.market || ''}</td>
-      <td class="px-4 py-3 text-right font-semibold tabular-nums">${roiPct}</td>
-      <td class="px-4 py-3">
-        <div class="flex flex-col gap-1">
+      <td class="col-date">${kickoffTxt}</td>
+
+      <td class="col-roi" data-roi="${roiLocal}">
+        <span class="roi-pill">${roiPct}</span>
+      </td>
+
+      <td class="col-sport">${it.sport || ''}</td>
+
+      <td class="col-league">${leagueCell}</td>
+
+      <td class="col-gm">
+        <div class="gm">
+          <div class="gm-game">${it.game || ''}</div>
+          <div class="gm-market">${it.market || ''}</div>
+        </div>
+      </td>
+
+      <td class="col-bets">
+        <div class="bets">
           <div>${bets.top}</div>
           <div>${bets.bottom}</div>
         </div>
       </td>
-      <td class="px-4 py-3">${bookiesCell}</td>
-      <td class="px-2 py-3 text-center">
-        <button class="toggle-odds p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Show odds table">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 inline-block" viewBox="0 0 24 24" fill="none">
+
+      <td class="col-bookies">${bookiesCell}</td>
+
+      <td class="col-actions">
+        <button class="toggle-odds icon-btn" title="Show odds table" type="button">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 24 24" fill="none">
             <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
             <path d="M8 7h8M7 11h10M7 15h10M7 19h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
@@ -1093,7 +1105,7 @@ async function fetchData() {
     const trDetails = document.createElement('tr');
     trDetails.className = 'hidden';
     const tdDetails = document.createElement('td');
-    tdDetails.colSpan = 9;
+    tdDetails.colSpan = 8;
     tdDetails.innerHTML = it.book_table ? renderFullBookTable(it) : '';
     trDetails.appendChild(tdDetails);
 

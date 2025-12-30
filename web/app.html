@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arb Arena – Live Opportunities</title>
+
+  <!-- Keep Tailwind output.css available (your JS/templates still use some utility classes) -->
+  <link rel="stylesheet" href="/output.css" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <style>
+    :root{
+      --bg: #0b1220;
+      --bg2:#0a1020;
+      --nav: rgba(10, 24, 48, 0.78);
+
+      --panel: rgba(255,255,255,0.06);
+      --panel2: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.10);
+
+      --text: #e5e7eb;
+      --muted:#94a3b8;
+
+      --accent:#2563eb;
+      --accent2:#3b82f6;
+
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.25);
+    }
+
+    *{ box-sizing: border-box; }
+    html, body{ height:100%; }
+
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+      color: var(--text);
+
+      min-height:100vh;
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(1200px 600px at 20% -10%, rgba(37,99,235,0.18), transparent 60%),
+        radial-gradient(800px 500px at 90% 10%, rgba(59,130,246,0.12), transparent 60%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      background-repeat:no-repeat;
+      background-size:cover;
+      background-attachment:fixed;
+    }
+    @media (max-width: 768px){
+      body{ background-attachment: scroll; }
+    }
+
+    .wrap{ max-width: 1180px; margin: 0 auto; padding: 0 18px; }
+    .section{ padding: 18px 0 56px; }
+
+    /* Topbar */
+    .topbar{
+      position: sticky;
+      top:0;
+      z-index:50;
+      background: var(--nav);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 16px;
+      min-height: 76px;
+      padding: 14px 0;
+      flex-wrap: wrap;
+    }
+
+    .nav-links{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 14px;
+    }
+    .nav-link{
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: rgba(226,232,240,0.92);
+      text-decoration:none;
+      transition: background .15s ease, color .15s ease, transform .15s ease;
+    }
+    .nav-link:hover{
+      background: rgba(255,255,255,0.10);
+      color:#fff;
+    }
+
+    /* Right side info pills */
+    .top-right{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: .5rem;
+      padding: .45rem .65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: rgba(226,232,240,0.92);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .muted{ color: var(--muted); }
+
+    /* Smaller, cleaner select (timezone) */
+    .select-compact{
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(226,232,240,0.92);
+      border-radius: 10px;
+      padding: 6px 28px 6px 10px;
+      font-size: 13px;
+      line-height: 1.1;
+      outline: none;
+      cursor: pointer;
+      background-image:
+        linear-gradient(45deg, transparent 50%, rgba(226,232,240,0.85) 50%),
+        linear-gradient(135deg, rgba(226,232,240,0.85) 50%, transparent 50%);
+      background-position:
+        calc(100% - 16px) 55%,
+        calc(100% - 11px) 55%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    .select-compact:focus{
+      border-color: rgba(59,130,246,0.45);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.20);
+    }
+    option{ color:#0b1220; }
+
+    /* Cards */
+    .card{
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 18px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-pad{ padding: 18px; }
+
+    .card-title{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .card-title h2{
+      margin:0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .hint{ font-size: 12px; color: rgba(148,163,184,0.95); }
+
+    /* Filters layout */
+    .filters-grid{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .filters-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 640px){
+      .filters-grid{ grid-template-columns: 1fr; }
+    }
+
+    .field label{
+      display:block;
+      font-size: 14px;
+      font-weight: 800;
+      color: rgba(226,232,240,0.92);
+      margin-bottom: 8px;
+    }
+
+    /* Select-like triggers (dropdown) */
+    .select-like{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 8px;
+      width:100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      cursor:pointer;
+      color: rgba(226,232,240,0.92);
+    }
+    .select-like:hover{ background: rgba(255,255,255,0.10); }
+    .caret{ width:12px; height:12px; flex-shrink:0; opacity:.9; }
+    .truncate{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hidden{ display:none !important; }
+
+    .dropdown-panel{
+      position:absolute;
+      top:100%;
+      right:0;
+      margin-top: 8px;
+      width: min(520px, 92vw);
+      max-height: 56vh;
+      overflow:auto;
+      z-index: 60;
+      background: rgba(10, 24, 48, 0.92);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(2,6,23,.35);
+      padding: 12px;
+      backdrop-filter: blur(10px);
+    }
+    .dd-head{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .dd-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 720px){
+      .dd-grid{ grid-template-columns: 1fr; }
+    }
+
+    /* Buttons */
+    .btn{
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      cursor: pointer;
+      transition: background .15s ease, transform .15s ease;
+      white-space: nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,0.10); }
+    .btn:active{ transform: translateY(1px); }
+    .btn-primary{
+      background: var(--accent);
+      border-color: rgba(37,99,235,0.55);
+    }
+    .btn-primary:hover{ background: var(--accent2); }
+
+    .actions-row{
+      margin-top: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .actions-left{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    details{
+      margin-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 12px;
+    }
+    summary{
+      cursor:pointer;
+      font-size: 13px;
+      color: rgba(226,232,240,0.85);
+      user-select:none;
+    }
+    .more-grid{
+      margin-top: 12px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 720px){
+      .more-grid{ grid-template-columns: 1fr; }
+    }
+    .input{
+      width:100%;
+      color: rgba(226,232,240,0.92);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+    }
+    .input:focus{
+      border-color: rgba(59,130,246,0.45);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.20);
+    }
+
+    /* Min ROI slider (cleaner) */
+    .range-row{ display:flex; align-items:center; gap:12px; }
+    .range{ width:100%; -webkit-appearance:none; appearance:none; height: 6px; border-radius:999px; background: rgba(255,255,255,0.14); outline:none; }
+    .range::-webkit-slider-thumb{
+      -webkit-appearance:none; appearance:none;
+      width: 18px; height: 18px; border-radius: 999px;
+      background: var(--accent2);
+      border: 2px solid rgba(255,255,255,0.65);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    }
+    .range::-moz-range-thumb{
+      width: 18px; height:18px; border-radius:999px;
+      background: var(--accent2);
+      border: 2px solid rgba(255,255,255,0.65);
+    }
+    .range-val{
+      min-width: 52px;
+      text-align:right;
+      font-variant-numeric: tabular-nums;
+      color: rgba(226,232,240,0.92);
+    }
+
+    /* Table */
+    .table-wrap{ overflow-x:auto; }
+    table.arb-table{
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+    .arb-table thead th{
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      text-align: left;
+      padding: 12px 14px;
+      background: rgba(10, 24, 48, 0.72);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+      color: rgba(226,232,240,0.92);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .arb-table thead th[data-sort]{ cursor:pointer; }
+    .arb-table tbody td{
+      padding: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      vertical-align: middle;
+      color: rgba(226,232,240,0.92);
+    }
+    .arb-table tbody tr{ transition: background-color .12s ease; }
+    .arb-table tbody tr:hover{ background: rgba(255,255,255,0.04); }
+
+    /* ROI highlight */
+    .roi-pill{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding: .45rem .7rem;
+      border-radius: 999px;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      background: linear-gradient(90deg, rgba(37,99,235,0.95), rgba(59,130,246,0.85));
+      box-shadow: 0 10px 26px rgba(37,99,235,0.25);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Combined game/market cell */
+    .gm{ display:flex; flex-direction:column; gap:4px; min-width: 240px; }
+    .gm-game{ font-weight: 800; letter-spacing:-0.01em; }
+    .gm-market{ color: rgba(148,163,184,0.95); font-size: 12px; }
+
+    /* Bets cell */
+    .bets{ display:flex; flex-direction:column; gap:6px; }
+
+    /* Bookies stack */
+    .stack{ display:flex; flex-direction:column; gap:10px; }
+
+    /* Actions icon button */
+    .icon-btn{
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(226,232,240,0.92);
+      border-radius: 12px;
+      padding: 10px;
+      cursor:pointer;
+    }
+    .icon-btn:hover{ background: rgba(255,255,255,0.10); }
+    .icon{ width: 18px; height: 18px; }
+
+    /* Table footer */
+    .table-footer{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+    }
+    .count{ font-size: 12px; color: rgba(148,163,184,0.95); }
+    .pager{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pageNums{ font-variant-numeric: tabular-nums; }
+
+    /* Responsive: hide some columns */
+    @media (max-width: 980px){
+      .col-league{ display:none; }
+    }
+    @media (max-width: 720px){
+      .col-sport{ display:none; }
+      .gm{ min-width: 200px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="topbar-inner">
+        <!-- Use your exact logo block sizing -->
+        <div class="flex items-center gap-3">
+          <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
+          <div>
+            <h1 class="text-3xl font-extrabold tracking-tight">Arb Arena</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Free live arbitrage finder</p>
+          </div>
+        </div>
+
+        <div class="nav-links">
+          <a class="nav-link" href="/">Home</a>
+          <a class="nav-link" href="/about">About</a>
+          <a class="nav-link" href="/disclaimer">Disclaimer</a>
+        </div>
+
+        <div class="top-right">
+          <div class="pill">Last updated: <span id="lastUpdated">—</span></div>
+
+          <div class="pill">
+            <span class="muted">Timezone</span>
+            <select id="tzSelect" class="select-compact">
+              <option value="auto">Auto (Local)</option>
+              <option value="AEST" selected>AEST</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap section">
+    <!-- Filters -->
+    <section class="card card-pad" style="margin-bottom:16px;">
+      <div class="card-title">
+        <h2>Filters</h2>
+        <div class="hint">Sorted by ROI (desc). Click headers to sort.</div>
+      </div>
+
+      <div class="filters-grid">
+        <!-- Sport dropdown -->
+        <div id="sportsWrapper" class="relative field" style="position:relative;">
+          <label>Sports</label>
+          <div id="sportsDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="sportsSummary" class="truncate">All sports</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="sportsPanel" class="dropdown-panel hidden">
+            <div class="dd-head">
+              <label class="dd-all inline-flex items-center gap-2">
+                <input id="sportsSelectAll" type="checkbox" class="rounded">
+                <span>Select all</span>
+              </label>
+              <span id="sportsSelectedCount" class="hint" style="margin-left:auto;">All</span>
+            </div>
+            <div id="sportsChkWrap" class="dd-grid"></div>
+          </div>
+        </div>
+
+        <!-- League dropdown -->
+        <div id="leaguesWrapper" class="relative field" style="position:relative;">
+          <label>League (Comp ID)</label>
+          <div id="leaguesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="leaguesSummary" class="truncate">All leagues</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="leaguesPanel" class="dropdown-panel hidden">
+            <div class="dd-head">
+              <label class="dd-all inline-flex items-center gap-2">
+                <input id="leaguesSelectAll" type="checkbox" class="rounded">
+                <span>Select all</span>
+              </label>
+              <span id="leaguesSelectedCount" class="hint" style="margin-left:auto;">All</span>
+            </div>
+            <div id="leaguesChkWrap" class="dd-grid"></div>
+          </div>
+        </div>
+
+        <!-- Bookies dropdown -->
+        <div id="bookiesWrapper" class="relative field" style="position:relative;">
+          <label>Bookies</label>
+          <div id="bookiesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
+            <span id="bookiesSummary" class="truncate">All bookies</span>
+            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
+          </div>
+          <div id="bookiesPanel" class="dropdown-panel hidden">
+            <div class="dd-head">
+              <label class="dd-all inline-flex items-center gap-2">
+                <input id="bookiesSelectAll" type="checkbox" class="rounded">
+                <span>Select all</span>
+              </label>
+              <span id="bookiesSelectedCount" class="hint" style="margin-left:auto;">All</span>
+            </div>
+            <div id="bookiesChkWrap" class="dd-grid"></div>
+          </div>
+        </div>
+
+        <!-- Min ROI -->
+        <div class="field">
+          <label for="minRoi">Min ROI (%)</label>
+          <div class="range-row">
+            <input id="minRoi" class="range" type="range" min="0" max="10" value="0" step="0.1" />
+            <span id="minRoiValue" class="range-val">0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <details>
+        <summary>More filters</summary>
+        <div class="more-grid">
+          <div class="field">
+            <label for="dateFrom">From</label>
+            <input id="dateFrom" type="date" class="input" />
+          </div>
+          <div class="field">
+            <label for="dateTo">To</label>
+            <input id="dateTo" type="date" class="input" />
+          </div>
+        </div>
+      </details>
+
+      <div class="actions-row">
+        <div class="actions-left">
+          <button id="resetFilters" class="btn" type="button">Reset</button>
+          <button id="refresh" class="btn btn-primary" type="button">Refresh</button>
+          <button id="requestUpdate" class="btn" type="button">Request update</button>
+          <span id="updateStatus" class="hint"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="card" style="overflow:hidden;">
+      <div class="table-wrap">
+        <table class="arb-table">
+          <thead>
+            <tr>
+              <th class="col-date" data-sort="kickoff">Date</th>
+              <th class="col-roi" data-sort="roi">ROI</th>
+              <th class="col-sport" data-sort="sport">Sport</th>
+              <th class="col-league" data-sort="league">League</th>
+              <th class="col-gm">Game / Market</th>
+              <th class="col-bets">Bets</th>
+              <th class="col-bookies">Bookies</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        <div class="count"><span id="totalCount">0</span> results</div>
+        <div class="pager">
+          <button id="prevPage" class="btn" type="button" style="padding:8px 10px;border-radius:10px;">Prev</button>
+          <span class="pageNums"><span id="page">1</span>/<span id="pages">1</span></span>
+          <button id="nextPage" class="btn" type="button" style="padding:8px 10px;border-radius:10px;">Next</button>
+          <select id="pageSize" class="select-compact" style="padding:6px 28px 6px 10px;">
+            <option selected>15</option><option>25</option><option>50</option>
+          </select>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js?v=2025-12-30-ui" defer></script>
+</body>
+</html>

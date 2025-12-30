@@ -1,198 +1,174 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Arbitrage Finder – Live Opportunities</title>
+  <title>Arb Arena — Free live arbitrage finder</title>
+  <meta name="description" content="Find live arbitrage opportunities fast with a clean table, filters, and clear data freshness." />
   <link rel="stylesheet" href="/output.css" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <style>
-    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    tbody tr { transition: background-color .12s ease; }
-    html:not(.dark) tbody tr:hover { background: #f8fafc; }
-    html.dark tbody tr:hover { background: #0f172a; }
-    thead th[data-sort]::after { content: none !important; }
-    .sort-indicator svg { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
+    .hero{
+      display:grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 28px;
+      align-items: start;
+      margin-top: 12px;
+    }
+    @media (max-width: 980px){
+      .hero{ grid-template-columns: 1fr; }
+    }
 
-    /* Bookie chips in the Bookies column */
-    .bookie-chip { display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(16,185,129,.1); border-radius:12px; padding:6px 10px; }
-    html.dark .bookie-chip { background: rgba(16,185,129,.2); }
-    .bookie-identity { display:flex; align-items:center; gap:8px; min-width:0; }
-    .bookie-chip img { width:20px; height:20px; border-radius:4px; flex-shrink:0; }
-    .bookie-name { font-weight:500; color:#065f46; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    html.dark .bookie-name { color:#d1fae5; }
-    .bookie-odds { font-weight:700; min-width:3.5rem; text-align:right; }
-
-    /* Select-like trigger for dropdowns */
-    .select-like { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgb(203 213 225); background:#fff; cursor:pointer; }
-    html.dark .select-like { border-color: rgb(71 85 105); background: rgb(30 41 59); }
-    .caret { width:12px; height:12px; flex-shrink:0; }
-
-    /* Absolute dropdown panel */
-    .dropdown-panel { position:absolute; top:100%; right:0; margin-top:6px; width:min(520px,92vw); max-height:56vh; overflow:auto; z-index:50; background:#fff; border:1px solid rgb(203 213 225); border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,.25); padding:12px; }
-    html.dark .dropdown-panel { background:rgb(15 23 42); border-color: rgb(71 85 105); }
+    .bullets{
+      margin: 14px 0 0;
+      padding-left: 18px;
+      color: rgba(226,232,240,0.92);
+    }
+    .bullets li{ margin: 10px 0; line-height: 1.55; }
   </style>
+
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-  <header class="max-w-7xl mx-auto px-4 lg:px-6 py-6">
-    <div class="flex items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
-        <div>
-          <h1 class="text-3xl font-extrabold tracking-tight">Arb Arena</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">Free live arbitrage finder</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-4">
-        <div class="text-sm text-slate-500 dark:text-slate-400">
-          Last updated: <span id="lastUpdated">—</span>
-        </div>
-        <label class="text-sm text-slate-600 dark:text-slate-300">
-          Timezone
-          <select id="tzSelect" class="ml-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <option value="auto">Auto (Local)</option>
-            <option value="AEST" selected>AEST</option>
-          </select>
-        </label>
-        <button id="themeToggle" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
-          Toggle theme
-        </button>
+
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <div class="nav-inner">
+        <!-- COPY YOUR APP LOGO BLOCK -->
+        <a href="/" style="text-decoration:none;">
+          <div class="flex items-center gap-3">
+            <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
+            <div>
+              <h1 class="text-3xl font-extrabold tracking-tight" style="margin:0; font-size: 22px; line-height:1.1;">Arb Arena</h1>
+              <p class="text-sm text-slate-500 dark:text-slate-400" style="margin:4px 0 0; color: rgba(148,163,184,0.95);">
+                Free live arbitrage finder
+              </p>
+            </div>
+          </div>
+        </a>
+
+        <nav class="nav-links">
+          <a class="nav-link" data-nav="home" href="/">Home</a>
+          <a class="nav-link" data-nav="about" href="/about">About</a>
+          <a class="nav-link" data-nav="disclaimer" href="/disclaimer">Disclaimer</a>
+          <a class="nav-link" data-nav="contact" href="/contact">Contact</a>
+          <a class="btn btn-primary" href="/app">Open app</a>
+        </nav>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 lg:px-6 pb-16">
-    <!-- Filters -->
-    <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
-      <div class="mb-4 flex items-end justify-between">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Filters</h2>
-        <div class="text-xs text-slate-500 dark:text-slate-400">Sorted by ROI (desc). Click headers to sort.</div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Sport dropdown -->
-        <div id="sportsWrapper" class="relative">
-          <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Sports</label>
-          <div id="sportsDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
-            <span id="sportsSummary" class="truncate">All sports</span>
-            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
-          </div>
-          <div id="sportsPanel" class="dropdown-panel hidden">
-            <div class="flex items-center gap-3 mb-2">
-              <label class="inline-flex items-center gap-2"><input id="sportsSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
-              <span id="sportsSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
-            </div>
-            <div id="sportsChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
-          </div>
-        </div>
-
-        <!-- League dropdown -->
-        <div id="leaguesWrapper" class="relative">
-          <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">League (Comp ID)</label>
-          <div id="leaguesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
-            <span id="leaguesSummary" class="truncate">All leagues</span>
-            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
-          </div>
-          <div id="leaguesPanel" class="dropdown-panel hidden">
-            <div class="flex items-center gap-3 mb-2">
-              <label class="inline-flex items-center gap-2"><input id="leaguesSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
-              <span id="leaguesSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
-            </div>
-            <div id="leaguesChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
-          </div>
-        </div>
-
-        <!-- Bookies dropdown -->
-        <div id="bookiesWrapper" class="relative">
-          <label class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Bookies</label>
-          <div id="bookiesDropdown" class="select-like" role="button" aria-haspopup="true" aria-expanded="false" tabindex="0">
-            <span id="bookiesSummary" class="truncate">All bookies</span>
-            <svg class="caret" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>
-          </div>
-          <div id="bookiesPanel" class="dropdown-panel hidden">
-            <div class="flex items-center gap-3 mb-2">
-              <label class="inline-flex items-center gap-2"><input id="bookiesSelectAll" type="checkbox" class="rounded"><span>Select all</span></label>
-              <span id="bookiesSelectedCount" class="ml-auto text-xs text-slate-500 dark:text-slate-400">All</span>
-            </div>
-            <div id="bookiesChkWrap" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
-          </div>
-        </div>
-
-        <!-- Min ROI -->
+  <main class="section">
+    <div class="wrap wrap-narrow">
+      <div class="hero">
+        <!-- Left hero -->
         <div>
-          <label for="minRoi" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">Min ROI (%)</label>
-          <div class="flex items-center gap-3">
-            <input id="minRoi" type="range" min="0" max="10" value="0" step="0.1" class="flex-1" />
-            <span id="minRoiValue" class="w-12 text-right tabular-nums">0.0</span>
+          <div class="h1">Find live arbitrage opportunities in seconds.</div>
+
+          <div class="lead">
+            Arb Arena scans markets and surfaces potential arbs in a clean table with fast filters and clear data freshness.
+          </div>
+
+          <div style="margin-top: 18px; display:flex; gap:12px; flex-wrap:wrap;">
+            <a class="btn btn-primary" href="/app">Open the app</a>
+            <a class="btn btn-ghost" href="/about">How it works</a>
+          </div>
+
+          <div class="muted" style="margin-top: 14px; font-size: 14px;">
+            Free while in beta. Odds move fast — always verify on bookmaker sites before placing any wager.
+          </div>
+        </div>
+
+        <!-- Right card -->
+        <div class="card">
+          <div style="font-weight:800; margin-bottom: 10px;">What you get</div>
+
+          <ul class="bullets">
+            <li><b style="color:white;">Live table</b> of opportunities with ROI + market details.</li>
+            <li><b style="color:white;">Fast filters</b> (sport, league, bookies, ROI).</li>
+            <li><b style="color:white;">Transparent freshness</b> so you know when data was last scraped.</li>
+            <li><b style="color:white;">Roadmap</b>: alerts, saved filters, and paid tier later.</li>
+          </ul>
+
+          <div class="card-inner" style="margin-top: 16px; font-size: 13px; line-height: 1.55;">
+            <b style="color:white;">Important:</b> Arb Arena is for informational purposes only and does not provide betting advice.
+            Odds can change quickly. See the full <a href="/disclaimer" style="text-decoration:underline;">Disclaimer</a>.
           </div>
         </div>
       </div>
 
-      <details class="mt-4">
-        <summary class="cursor-pointer text-sm text-slate-600 dark:text-slate-300">More filters</summary>
-        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="flex gap-2">
-            <div class="flex-1">
-              <label for="dateFrom" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">From</label>
-              <input id="dateFrom" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800" />
+      <!-- How it works -->
+      <div style="margin-top: 26px;">
+        <div style="font-weight: 800; font-size: 26px; margin-bottom: 12px;">How it works</div>
+
+        <div class="grid3">
+          <div class="card">
+            <div style="font-weight: 800; color:white; font-size: 14px;">1) Open the app</div>
+            <div class="subtle" style="margin-top: 10px; line-height:1.6;">
+              Browse opportunities in the live table.
             </div>
-            <div class="flex-1">
-              <label for="dateTo" class="block text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">To</label>
-              <input id="dateTo" type="date" class="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800" />
+          </div>
+
+          <div class="card">
+            <div style="font-weight: 800; color:white; font-size: 14px;">2) Filter hard</div>
+            <div class="subtle" style="margin-top: 10px; line-height:1.6;">
+              Dial in sports, leagues, bookies, and ROI thresholds.
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="font-weight: 800; color:white; font-size: 14px;">3) Verify quickly</div>
+            <div class="subtle" style="margin-top: 10px; line-height:1.6;">
+              Odds change — confirm markets on bookmaker sites before acting.
             </div>
           </div>
         </div>
-      </details>
-
-      <div class="mt-4 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <button id="resetFilters" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">Reset</button>
-          <button id="refresh" class="px-3 py-2 rounded-xl bg-primary hover:bg-blue-700 text-white">Refresh</button>
-          <button id="requestUpdate" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">Request update</button>
-          <span id="updateStatus" class="text-xs text-slate-500 dark:text-slate-400 ml-2"></span>
-        </div>
       </div>
-    </section>
-
-    <!-- Table -->
-    <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 sticky top-0 z-10">
-            <tr>
-              <th class="px-4 py-3 text-left cursor-pointer" data-sort="kickoff">Date</th>
-              <th class="px-4 py-3 text-left cursor-pointer" data-sort="sport">Sport</th>
-              <th class="px-4 py-3 text-left cursor-pointer" data-sort="league">League</th>
-              <th class="px-4 py-3 text-left">Game</th>
-              <th class="px-4 py-3 text-left">Market</th>
-              <th class="px-4 py-3 text-right cursor-pointer" data-sort="roi">ROI</th>
-              <th class="px-4 py-3 text-left">Bets</th>
-              <th class="px-4 py-3 text-left">Bookies</th>
-              <th class="px-4 py-3 text-left"></th>
-            </tr>
-          </thead>
-          <tbody id="tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
-        </table>
-      </div>
-
-      <div class="flex items-center justify-between p-3 border-t border-slate-200 dark:border-slate-700">
-        <div class="text-xs text-slate-500 dark:text-slate-400"><span id="totalCount">0</span> results</div>
-        <div class="flex items-center gap-2">
-          <button id="prevPage" class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800">Prev</button>
-          <span class="text-sm tabular-nums"><span id="page">1</span>/<span id="pages">1</span></span>
-          <button id="nextPage" class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800">Next</button>
-          <select id="pageSize" class="ml-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-            <option selected>15</option><option>25</option><option>50</option>
-          </select>
-        </div>
-      </div>
-    </section>
+    </div>
   </main>
 
-  <script src="/app.js?v=2025-11-12-09" defer></script>
+  <footer>
+    <div class="wrap wrap-narrow">
+      <div class="foot">
+        <div>
+          © <span id="y"></span> Arb Arena <span style="opacity:.5;">•</span>
+          Last updated: <span id="lastUpdated"></span> <span style="opacity:.5;">•</span> AEST
+        </div>
+
+        <div class="foot-links">
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/disclaimer">Disclaimer</a>
+          <a href="/app">Open app</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Active nav
+    (function(){
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const map = { "/": "home", "/about": "about", "/contact": "contact", "/disclaimer": "disclaimer" };
+      const key = map[path];
+      if (key) {
+        const el = document.querySelector(`[data-nav="${key}"]`);
+        if (el) el.classList.add("active");
+      }
+    })();
+
+    // Year + last updated (AEST)
+    document.getElementById("y").textContent = new Date().getFullYear();
+    const lm = new Date(document.lastModified);
+    const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", day:"2-digit", month:"short", year:"numeric" });
+    document.getElementById("lastUpdated").textContent = fmt.format(lm);
+  </script>
 </body>
 </html>
