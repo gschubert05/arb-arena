@@ -1,6 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const RENDER_POST = path.resolve(__dirname, "renderPost.mjs");
+
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -273,9 +279,18 @@ async function main() {
     fs.writeFileSync(tmpJson, JSON.stringify(payload, null, 2), "utf8");
 
     // Run your existing renderer
-    execFileSync("node", ["scripts/renderPost.mjs", "--in", tmpJson, "--out", outPath, "--format", "square", "--scale", "2"], {
-      stdio: "inherit",
-    });
+    execFileSync(
+      "node",
+      [
+        RENDER_POST,
+        "--in", tmpJson,
+        "--out", outPath,
+        "--format", "square",
+        "--scale", "2",
+      ],
+      { stdio: "inherit" }
+    );
+
 
     // Clean temp payload json if you want
     fs.unlinkSync(tmpJson);
