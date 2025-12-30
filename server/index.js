@@ -453,12 +453,22 @@ app.get('/api/opportunities', async (req, res) => {
   const leaguesList = [...new Set(base.map(i => i.league).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 
   const agenciesSet = new Set();
+
   for (const it of base) {
+    // 1) Add ALL agencies present in the odds table rows (this is the key fix)
+    const rows = it.book_table?.rows || [];
+    for (const row of rows) {
+      const a = cleanAgency(row?.agency || '');
+      if (a) agenciesSet.add(a);
+    }
+
+    // 2) Also keep the best sides (harmless redundancy)
     const l = cleanAgency(it.book_table?.best?.left?.agency || '');
     const r = cleanAgency(it.book_table?.best?.right?.agency || '');
     if (l) agenciesSet.add(l);
     if (r) agenciesSet.add(r);
   }
+
   const agencies = [...agenciesSet].sort((a,b)=>a.localeCompare(b));
 
   res.json({
