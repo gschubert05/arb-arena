@@ -43,7 +43,7 @@ jobs:
 
       - name: Render top 3 posts from opportunities.json
         run: |
-          node main/scripts/renderFromOpportunities.mjs \
+          node main/scripts/renderTopFromOpportunities.mjs \
             --opps data/server/data/opportunities.json \
             --active data/server/data/active_comp_ids.json \
             --outDir data/server/data/social/posts \
