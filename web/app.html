@@ -250,7 +250,7 @@
     .dd-grid label{
       display:flex;
       align-items:center;
-      gap: 4px;               /* tighter logo-to-text spacing */
+      gap: 3px;               /* tighter logo-to-text spacing */
       padding: 10px 10px;       /* no big padding, feels “list-like” */
       border: 0;
       background: transparent;
@@ -529,6 +529,230 @@
       .col-sport{ display:none; }
       .gm{ min-width: 200px; }
     }
+
+    /* ===== Calculator Modal (new theme) ===== */
+    .calc-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(2,6,23,0.66);
+      backdrop-filter: blur(8px);
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    .calc-modal{
+      width: min(720px, 94vw);
+      max-height: min(86vh, 820px);
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background:
+        radial-gradient(900px 400px at 20% -10%, rgba(37,99,235,0.18), transparent 55%),
+        radial-gradient(700px 400px at 90% 0%, rgba(59,130,246,0.12), transparent 60%),
+        rgba(10,18,34,0.94);
+      box-shadow: 0 20px 60px rgba(0,0,0,.55);
+    }
+
+    .calc-head{
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(10,18,34,0.88);
+      backdrop-filter: blur(10px);
+    }
+
+    .calc-title{
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      margin: 0;
+      font-size: 16px;
+      color: rgba(226,232,240,0.96);
+    }
+    .calc-sub{
+      margin-top: 6px;
+      font-size: 13px;
+      color: rgba(148,163,184,0.92);
+    }
+
+    .calc-close{
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.06);
+      color: rgba(226,232,240,0.92);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor:pointer;
+    }
+    .calc-close:hover{ background: rgba(255,255,255,0.10); }
+
+    .calc-body{
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .calc-legs{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 720px){
+      .calc-legs{ grid-template-columns: 1fr; }
+    }
+
+    .leg-card{
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .leg-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .leg-id{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width:0;
+    }
+    .leg-id img{
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      object-fit: contain;
+      background: rgba(255,255,255,0.06);
+      flex: 0 0 auto;
+    }
+    .leg-name{
+      font-weight: 900;
+      color: rgba(226,232,240,0.92);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .leg-bet{
+      font-size: 12px;
+      color: rgba(148,163,184,0.92);
+      margin-top: 2px;
+    }
+
+    .leg-fields{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .flabel{
+      font-size: 12px;
+      color: rgba(148,163,184,0.92);
+      margin-bottom: 6px;
+    }
+
+    .fin{
+      width: 100%;
+      border-radius: 12px;
+      padding: 10px 10px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      color: rgba(226,232,240,0.92);
+      outline: none;
+    }
+    .fin:focus{
+      border-color: rgba(59,130,246,0.45);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.18);
+    }
+
+    .lock-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .lock-btn{
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.05);
+      color: rgba(226,232,240,0.92);
+      border-radius: 12px;
+      padding: 8px 10px;
+      cursor:pointer;
+      font-weight: 800;
+      font-size: 12px;
+    }
+    .lock-btn:hover{ background: rgba(255,255,255,0.10); }
+    .lock-btn.active{
+      background: rgba(37,99,235,0.22);
+      border-color: rgba(59,130,246,0.35);
+    }
+
+    .payout{
+      font-size: 12px;
+      color: rgba(148,163,184,0.92);
+    }
+
+    .calc-controls{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 720px){
+      .calc-controls{ grid-template-columns: 1fr; }
+    }
+
+    .ctrl-card{
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .ctrl-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+    }
+
+    .summary{
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items:center;
+      justify-content:space-between;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 18px;
+      background: rgba(10,18,34,0.75);
+    }
+    .summary-left{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: rgba(226,232,240,0.92);
+      font-size: 13px;
+    }
+    .summary-left b{ font-variant-numeric: tabular-nums; }
+    .summary-note{
+      color: rgba(148,163,184,0.92);
+      font-size: 12px;
+      padding: 0 18px 16px;
+    }
+
   </style>
 </head>
 
