@@ -513,7 +513,11 @@ app.post('/api/trigger-scrape', express.json(), async (req, res) => {
 });
 
 // --- fallback ---
-app.get('*', (req, res) => {
+// Don't serve HTML for asset-like paths (prevents /styles.css returning index.html)
+app.get('*', (req, res, next) => {
+  // If path includes a dot, it's likely an asset (/styles.css, /logo.svg, /app.js, etc.)
+  if (req.path.includes('.')) return res.status(404).end();
+
   // If someone hits a random path on app. subdomain, show the app.
   // Otherwise, show the marketing homepage.
   return res.sendFile(wantsAppHost(req) ? APP_INDEX : MARKETING_INDEX);
