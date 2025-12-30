@@ -2,20 +2,31 @@ name: Render Social Posts
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
+  push:
+    branches: [data]
+    paths:
+      - "server/data/opportunities.json"
+      - "server/data/active_comp_ids.json"
+
+permissions:
+  contents: write
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout main (code + assets)
+      - name: Checkout main (code)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: main
+          path: main
+
+      - name: Checkout data (latest data)
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -23,66 +34,28 @@ jobs:
           node-version: 20
 
       - name: Install deps (scripts)
-        working-directory: scripts
+        working-directory: main/scripts
         run: npm install
 
       - name: Install Playwright Chromium
-        working-directory: scripts
+        working-directory: main/scripts
         run: npx playwright install --with-deps chromium
 
-      - name: Fetch data branch (latest opportunities.json + posted_keys.json)
+      - name: Render top 3 posts from opportunities.json
         run: |
-          git fetch origin data:data
+          node main/scripts/renderFromOpportunities.mjs \
+            --opps data/server/data/opportunities.json \
+            --active data/server/data/active_comp_ids.json \
+            --outDir data/server/data/social/posts \
+            --postedKeys data/server/data/social/posted_keys.json \
+            --top 3
 
-          mkdir -p server/data
-          git show data:server/data/opportunities.json > server/data/opportunities.json
-
-          # posted keys (create empty if not exists yet)
-          if git cat-file -e data:server/data/social_posts/posted_keys.json 2>/dev/null; then
-            git show data:server/data/social_posts/posted_keys.json > posted_keys.json
-          else
-            echo "[]" > posted_keys.json
-          fi
-
-      - name: Render top 3 NEW posts (avoid duplicates)
+      - name: Commit outputs back to data branch
+        working-directory: data
         run: |
-          rm -rf generated_posts
-          node scripts/renderTopFromOpportunities.mjs \
-            --in server/data/opportunities.json \
-            --outdir generated_posts \
-            --top 3 \
-            --renderer scripts/renderPost.mjs \
-            --format square \
-            --scale 2 \
-            --posted-in posted_keys.json \
-            --posted-out posted_keys_updated.json
-
-      - name: Create worktree for data branch
-        run: |
-          git worktree add data_worktree data
-
-      - name: Copy outputs into data branch + commit
-        run: |
-          OUTDIR="data_worktree/server/data/social_posts/latest"
-          mkdir -p "$OUTDIR"
-          mkdir -p "data_worktree/server/data/social_posts"
-
-          # Copy new images (if any exist)
-          if ls generated_posts/post_*.png 1> /dev/null 2>&1; then
-            rm -f "$OUTDIR"/post_*.png "$OUTDIR"/manifest.json
-            cp -f generated_posts/post_*.png "$OUTDIR"/
-            cp -f generated_posts/manifest.json "$OUTDIR"/manifest.json
-          else
-            echo "No new PNGs generated (likely all duplicates)."
-          fi
-
-          # Always update posted keys file
-          cp -f posted_keys_updated.json data_worktree/server/data/social_posts/posted_keys.json
-
-          cd data_worktree
           git config user.name "arb-arena-bot"
-          git config user.email "actions@github.com"
-
-          git add server/data/social_posts
-          git diff --staged --quiet || git commit -m "Update social posts (top 3, de-duped)"
-          git push origin data
+          git config user.email "actions@users.noreply.github.com"
+          git add server/data/social
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Render social posts"
+          git push

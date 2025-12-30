@@ -1,222 +1,243 @@
-// scripts/renderTopFromOpportunities.mjs
 import fs from "fs";
 import path from "path";
-import { spawnSync } from "child_process";
+import { execFileSync } from "child_process";
 
 function arg(name, def = null) {
   const i = process.argv.indexOf(`--${name}`);
   if (i === -1) return def;
   return process.argv[i + 1] ?? def;
 }
-function safeReadJson(p, fallback = null) {
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch {
-    return fallback;
-  }
+
+function safeReadJson(p) {
+  return JSON.parse(fs.readFileSync(p, "utf8"));
 }
+
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
 }
-function escapeStr(s) {
-  return (s ?? "").toString();
+
+function slugify(s = "") {
+  return String(s)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
-function toBookieKey(agency = "") {
-  const a = agency.toLowerCase().replace(/[^a-z0-9]/g, "");
+function toPct(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return null;
+  // opportunities.json roi is decimal, e.g. 0.0627
+  return n > 1 ? n : n * 100;
+}
+
+function normalizeBookieKey(name = "") {
+  const s = String(name).trim().toLowerCase();
+
   const map = {
-    unibet: "unibet",
-    neds: "neds",
-    tab: "tab",
-    sportsbet: "sportsbet",
-    pointsbet: "pointsbet",
-    playup: "playup",
-    palmerbet: "palmerbet",
-    betfair: "betfair",
-    betr: "betr",
-    betright: "betright",
-    boombet: "boombet",
-    dabble: "dabble",
-    bet365: "bet365",
-    betestate: "betestate",
+    "unibet": "unibet",
+    "uni bet": "unibet",
+    "neds": "neds",
+    "sportsbet": "sportsbet",
+    "sports bet": "sportsbet",
+    "pointsbet": "pointsbet",
+    "points bet": "pointsbet",
+    "bet365": "bet365",
+    "bet 365": "bet365",
+    "tab": "tab",
+    "betfair": "betfair",
+    "bet right": "betright",
+    "betright": "betright",
+    "betr": "betr",
+    "playup": "playup",
+    "play up": "playup",
+    "palmerbet": "palmerbet",
+    "palmer bet": "palmerbet",
+    "boombet": "boombet",
+    "boom bet": "boombet",
+    "dabble": "dabble",
+    "beteasy": "beteasy",
+    "bet easy": "beteasy",
+    "betestate": "betestate",
+    "bet estate": "betestate",
+    "ladbrokes": "ladbrokes",
   };
-  return map[a] ?? a;
+
+  if (map[s]) return map[s];
+
+  // fallback: strip non-alphanum
+  return s.replace(/[^a-z0-9]/g, "");
 }
 
-function parseUrlParams(url = "") {
-  try {
-    const u = new URL(url);
-    const get = (k) => u.searchParams.get(k) || "";
-    return {
-      matchnumber: get("matchnumber"),
-      marketid: get("marketid"),
-      competitionid: get("competitionid"),
-    };
-  } catch {
-    return { matchnumber: "", marketid: "", competitionid: "" };
-  }
+function parseHeaderCell(cell = "") {
+  // Expected examples:
+  // "Over 3.50" / "Under 3.50"
+  // Sometimes could be "Yes" "No", "Home -1.5" etc
+  const raw = String(cell).trim();
+  if (!raw) return { side: "", line: "" };
+
+  // split on first space
+  const m = raw.match(/^([^\s]+)\s+(.+)$/);
+  if (!m) return { side: raw, line: "" };
+
+  const side = m[1];
+  const line = m[2];
+
+  return { side, line };
 }
 
-function formatAestFromIso(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return String(iso);
+function buildLegsFromBookTable(item) {
+  const bt = item?.book_table;
+  if (!bt?.best || !Array.isArray(bt?.headers)) return null;
 
-  const fmtDate = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(d);
+  // headers: ["Agency", "Over 3.50", "Under 3.50", "Updated"]
+  // left column corresponds to headers[1], right column to headers[2]
+  const leftHeader = bt.headers[1] ?? "";
+  const rightHeader = bt.headers[2] ?? "";
 
-  const fmtTime = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d).replace(" am", "am").replace(" pm", "pm");
+  const left = parseHeaderCell(leftHeader);
+  const right = parseHeaderCell(rightHeader);
 
-  return `${fmtDate} • ${fmtTime} AEST`;
-}
+  const bestLeft = bt.best.left;   // {agency, odds}
+  const bestRight = bt.best.right; // {agency, odds}
 
-// Convert header label → { side, line, headerLineForTop }
-function parseSelectionLabel(label = "") {
-  const s = String(label || "").trim();
-  if (!s) return { side: "", line: "", headerLine: "" };
+  if (!bestLeft?.agency || !bestRight?.agency) return null;
 
-  // Over 3.50 / Under 3.50
-  let m = s.match(/^(Over|Under)\s+([+\-]?\d+(?:\.\d+)?)$/i);
-  if (m) {
-    const side = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
-    const num = m[2];
-    const line = num.startsWith("+") || num.startsWith("-") ? num : `+${num}`;
-    const headerLine = num.replace(/^[+\-]/, "");
-    return { side, line, headerLine };
-  }
+  // For consistency with your design, prepend "+" if line is numeric-like and missing sign
+  const normalizeLine = (ln) => {
+    const s = String(ln ?? "").trim();
+    if (!s) return "";
+    if (/^[+-]/.test(s)) return s;
+    // if starts with a number, add "+"
+    if (/^\d/.test(s)) return `+${s}`;
+    return s;
+  };
 
-  // Team (+12.5) or Team (-12.5)
-  m = s.match(/^(.+?)\s*\(\s*([+\-]\d+(?:\.\d+)?)\s*\)\s*$/);
-  if (m) {
-    const side = m[1].trim();
-    const line = m[2].trim();
-    const headerLine = line.replace(/^[+\-]/, "");
-    return { side, line, headerLine };
-  }
-
-  // Team +12.5 (no parens)
-  m = s.match(/^(.+?)\s+([+\-]\d+(?:\.\d+)?)$/);
-  if (m) {
-    const side = m[1].trim();
-    const line = m[2].trim();
-    const headerLine = line.replace(/^[+\-]/, "");
-    return { side, line, headerLine };
-  }
-
-  // Fallback: no line
-  return { side: s, line: "", headerLine: "" };
-}
-
-function buildDedupeKey(item) {
-  const urlBits = parseUrlParams(item?.url || "");
-  const bt = item?.book_table || {};
-  const headers = Array.isArray(bt.headers) ? bt.headers : [];
-  const leftLabel = (headers[1] || "").trim();
-  const rightLabel = (headers[2] || "").trim();
-  // Stable-ish: IDs + market + labels + game + sport (NO odds)
   return [
-    urlBits.competitionid || item?.competitionid || "",
-    urlBits.marketid || "",
-    urlBits.matchnumber || "",
-    (item?.sport || "").trim(),
-    (item?.game || "").trim(),
-    (item?.market || "").trim(),
-    leftLabel,
-    rightLabel,
+    {
+      side: left.side,
+      line: normalizeLine(left.line),
+      odds: Number(bestLeft.odds),
+      bookie: bestLeft.agency,
+      bookieKey: normalizeBookieKey(bestLeft.agency),
+    },
+    {
+      side: right.side,
+      line: normalizeLine(right.line),
+      odds: Number(bestRight.odds),
+      bookie: bestRight.agency,
+      bookieKey: normalizeBookieKey(bestRight.agency),
+    },
+  ];
+}
+
+function loadLeagueMap(activeCompIdsPath) {
+  const a = safeReadJson(activeCompIdsPath);
+
+  // You said: "leagues_by_compid within active_comp_ids.json"
+  // We'll support a couple shapes safely.
+  const m =
+    a?.leagues_by_compid ||
+    a?.leaguesByCompid ||
+    a?.leagues_by_compId ||
+    null;
+
+  if (m && typeof m === "object") return m;
+
+  return {};
+}
+
+function dedupeKeyFromItem(item, league) {
+  // Exclude odds/roi so we don't repost same arb just because odds changed.
+  const sport = item?.sport ?? "";
+  const comp = String(item?.competitionid ?? "");
+  const game = item?.game ?? "";
+  const market = item?.market ?? "";
+  const headers = item?.book_table?.headers ?? [];
+  const h1 = headers[1] ?? "";
+  const h2 = headers[2] ?? "";
+
+  return [
+    String(sport).trim().toLowerCase(),
+    String(league).trim().toLowerCase(),
+    comp.trim(),
+    String(game).trim().toLowerCase(),
+    String(market).trim().toLowerCase(),
+    String(h1).trim().toLowerCase(),
+    String(h2).trim().toLowerCase(),
   ].join("|");
 }
 
-function main() {
-  const inPath = arg("in");
-  const outDir = arg("outdir", "generated_posts");
+function readPostedKeys(p) {
+  if (!fs.existsSync(p)) return new Set();
+  try {
+    const arr = safeReadJson(p);
+    if (Array.isArray(arr)) return new Set(arr.map(String));
+  } catch {}
+  return new Set();
+}
+
+function writePostedKeys(p, set) {
+  const arr = Array.from(set);
+  fs.writeFileSync(p, JSON.stringify(arr, null, 2), "utf8");
+}
+
+function isoOrString(x) {
+  if (!x) return "";
+  return String(x);
+}
+
+async function main() {
+  const oppsPath = arg("opps");     // e.g. data/server/data/opportunities.json
+  const activePath = arg("active"); // e.g. data/server/data/active_comp_ids.json
+  const outDir = arg("outDir", "data/server/data/social/posts");
+  const postedKeysPath = arg("postedKeys", "data/server/data/social/posted_keys.json");
   const topN = Number(arg("top", "3")) || 3;
 
-  const renderer = arg("renderer", "scripts/renderPost.mjs");
-  const format = arg("format", "square");
-  const scale = arg("scale", "2");
-
-  const postedIn = arg("posted-in", null);
-  const postedOut = arg("posted-out", null);
-
-  if (!inPath) {
-    console.error("Missing --in <opportunities.json>");
+  if (!oppsPath || !activePath) {
+    console.error("Usage: node renderFromOpportunities.mjs --opps <opportunities.json> --active <active_comp_ids.json>");
     process.exit(1);
   }
 
-  const opps = safeReadJson(inPath, {});
-  const items = Array.isArray(opps.items) ? opps.items : [];
+  const opps = safeReadJson(oppsPath);
+  const items = Array.isArray(opps?.items) ? opps.items : [];
+  const lastUpdated = opps?.lastUpdated || "";
 
-  const postedArr = postedIn ? safeReadJson(postedIn, []) : [];
-  const postedSet = new Set(Array.isArray(postedArr) ? postedArr : []);
+  const leagueMap = loadLeagueMap(activePath);
 
-  const lastUpdatedText = formatAestFromIso(opps.lastUpdated || opps.lastUpdatedAt || opps.generatedAt);
-
-  // Rank by ROI (decimal) high → low, but skip duplicates
-  const ranked = items
-    .filter((x) => Number.isFinite(Number(x?.roi)))
-    .sort((a, b) => Number(b.roi) - Number(a.roi))
-    .filter((item) => {
-      const key = buildDedupeKey(item);
-      return key && !postedSet.has(key);
-    })
-    .slice(0, topN);
-
-  if (ranked.length === 0) {
-    console.log("No new arbs to post (all top candidates are duplicates).");
-    // still write postedOut if requested
-    if (postedOut) fs.writeFileSync(postedOut, JSON.stringify([...postedSet], null, 2), "utf8");
-    process.exit(0);
-  }
+  // Sort by ROI desc
+  const sorted = items
+    .slice()
+    .sort((a, b) => (Number(b?.roi) || 0) - (Number(a?.roi) || 0));
 
   ensureDir(outDir);
-  ensureDir(path.join(outDir, "payloads"));
+  ensureDir(path.dirname(postedKeysPath));
 
-  const manifest = {
-    generatedAt: new Date().toISOString(),
-    sourceLastUpdated: opps.lastUpdated || null,
-    posts: [],
-  };
+  const posted = readPostedKeys(postedKeysPath);
 
-  ranked.forEach((item, idx) => {
-    const bt = item?.book_table || {};
-    const headers = Array.isArray(bt.headers) ? bt.headers : [];
-    const leftLabel = (headers[1] || "").trim();
-    const rightLabel = (headers[2] || "").trim();
+  let rendered = 0;
 
-    const leftParsed = parseSelectionLabel(leftLabel);
-    const rightParsed = parseSelectionLabel(rightLabel);
+  for (const item of sorted) {
+    if (rendered >= topN) break;
 
-    const bestLeft = bt?.best?.left || {};
-    const bestRight = bt?.best?.right || {};
+    const competitionid = item?.competitionid;
+    const league = leagueMap?.[String(competitionid)] ?? "";
 
-    const legs = [
-      {
-        side: escapeStr(leftParsed.side),
-        line: escapeStr(leftParsed.line),
-        odds: Number(bestLeft.odds),
-        bookie: escapeStr(bestLeft.agency || ""),
-        bookieKey: toBookieKey(bestLeft.agency || ""),
-      },
-      {
-        side: escapeStr(rightParsed.side),
-        line: escapeStr(rightParsed.line),
-        odds: Number(bestRight.odds),
-        bookie: escapeStr(bestRight.agency || ""),
-        bookieKey: toBookieKey(bestRight.agency || ""),
-      },
-    ];
+    const legs = buildLegsFromBookTable(item);
+    if (!legs) continue;
 
-    // Line shown at top: prefer something meaningful
-    const headerLine = leftParsed.headerLine || rightParsed.headerLine || "";
+    // Determine "line" displayed in your header:
+    // Prefer numeric part from header if present (e.g. "Over 3.50" → 3.50)
+    const headers = item?.book_table?.headers ?? [];
+    const left = parseHeaderCell(headers[1] ?? "");
+    const lineDisplay = left?.line ? String(left.line).trim() : "";
+
+    const key = dedupeKeyFromItem(item, league);
+    if (posted.has(key)) continue;
+
+    const roiPct = toPct(item?.roi);
+    if (roiPct === null) continue;
 
     const payload = {
       brand: {
@@ -226,62 +247,49 @@ function main() {
       },
       meta: {
         generatedAt: new Date().toISOString(),
-        lastUpdatedText: lastUpdatedText || "",
-        targetProfit: 20,
-        profitWindow: 10,
-        roundStep: 5,
+        lastUpdatedText: lastUpdated ? isoOrString(lastUpdated) : "",
+        // you can also pass these if you want:
+        // roundStep: 5,
+        // targetProfit: 20,
+        // profitWindow: 10,
       },
       arb: {
-        roi: Number(item.roi) * 100,         // decimal → percent
-        sport: escapeStr(item.sport || ""),
-        date: escapeStr(item.date || ""),
-        league: escapeStr(item.league || item.competition || item.season || ""),
-        event: escapeStr(item.game || ""),
-        market: escapeStr(item.market || ""),
-        line: escapeStr(headerLine),
+        roi: roiPct,
+        sport: item?.sport ?? "",
+        date: item?.date ?? "",
+        league: league,
+        event: item?.game ?? "",
+        market: item?.market ?? "",
+        line: lineDisplay,
         legs,
       },
     };
 
-    const payloadPath = path.join(outDir, "payloads", `post_${idx + 1}.json`);
-    fs.writeFileSync(payloadPath, JSON.stringify(payload, null, 2), "utf8");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileBase = `${stamp}_${slugify(item?.sport)}_${slugify(item?.game)}_${slugify(item?.market)}`.slice(0, 150);
+    const outPath = path.join(outDir, `${fileBase}.png`);
+    const tmpJson = path.join(outDir, `${fileBase}.json`);
 
-    const outPng = path.join(outDir, `post_${idx + 1}.png`);
-    const res = spawnSync(
-      "node",
-      [renderer, "--in", payloadPath, "--out", outPng, "--format", format, "--scale", String(scale)],
-      { stdio: "inherit" }
-    );
+    fs.writeFileSync(tmpJson, JSON.stringify(payload, null, 2), "utf8");
 
-    if (res.status !== 0) {
-      console.error(`Render failed for item ${idx + 1}`);
-      process.exit(res.status || 1);
-    }
-
-    const key = buildDedupeKey(item);
-    postedSet.add(key);
-
-    manifest.posts.push({
-      rank: idx + 1,
-      roi: payload.arb.roi,
-      game: payload.arb.event,
-      market: payload.arb.market,
-      left: leftLabel,
-      right: rightLabel,
-      outFile: path.basename(outPng),
-      payloadFile: path.basename(payloadPath),
-      url: item.url || "",
-      dedupeKey: key,
+    // Run your existing renderer
+    execFileSync("node", ["scripts/renderPost.mjs", "--in", tmpJson, "--out", outPath, "--format", "square", "--scale", "2"], {
+      stdio: "inherit",
     });
-  });
 
-  fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+    // Clean temp payload json if you want
+    fs.unlinkSync(tmpJson);
 
-  if (postedOut) {
-    fs.writeFileSync(postedOut, JSON.stringify([...postedSet], null, 2), "utf8");
+    posted.add(key);
+    rendered += 1;
   }
 
-  console.log(`Done. Rendered ${manifest.posts.length} post(s) into: ${outDir}`);
+  writePostedKeys(postedKeysPath, posted);
+
+  console.log(`Rendered ${rendered} post(s).`);
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
