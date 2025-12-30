@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   schedule:
       - cron: "0 23,3,9 * * *"
-  push:
-    branches: [data]
-    paths:
-      - "server/data/opportunities.json"
-      - "server/data/active_comp_ids.json"
 
 permissions:
   contents: write
