@@ -507,7 +507,7 @@ const Calc = (() => {
             <div class="flex flex-wrap gap-2">
               <span class="pill">Total stake <b id="calcTotal" class="tabular-nums"></b></span>
               <span class="pill">Min payout <b id="calcMinPayout" class="tabular-nums"></b></span>
-              <span class="pill"><span id="profitLabel"></span><b id="calcProfit" class="tabular-nums"></b></span>
+              <span class="pill profit-pill"><span id="profitLabel"></span><b id="calcProfit" class="tabular-nums"></b></span>
             </div>
           </div>
           <div class="calc-hint" id="calcHint"></div>
