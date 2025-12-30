@@ -102,6 +102,30 @@ function formatAEST(d) {
   return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
 }
 
+function formatAESTNoYear(d) {
+  // "31 Dec, 9:14 am" in AEST
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(dt);
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  const day = get("day");
+  const month = get("month");
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
+
+  return `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
+}
+
 function getAestNowParts() {
   // returns {year, monthIndex(0-11), day, hour, minute}
   const now = new Date();
@@ -133,47 +157,52 @@ function dateFromAestLocal(year, monthIndex, day, hour, minute) {
 
 function parseOpportunitiesEventDate(raw) {
   // Handles:
-  // 1) ISO strings -> Date
-  // 2) "Tue 30 Dec 20:00" (no year) -> infer year around New Year
+  // 1) ISO strings / explicit-year strings -> Date
+  // 2) "Tue 30 Dec 20:00" (no year) -> infer year:
+  //    if month < currentMonth(AEST) => year = currentYear + 1 else currentYear
+
   if (!raw) return null;
+
+  // allow passing a Date in
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+
   const s = String(raw).trim();
 
-  // If ISO or parseable by Date(), use it
-  const isoTry = new Date(s);
-  if (!Number.isNaN(isoTry.getTime())) return isoTry;
+  // ---- Case 2: NO-YEAR format FIRST (avoid bogus Date() parse -> 2001) ----
+  const m = s.match(
+    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/
+  );
+  if (m) {
+    const day = Number(m[2]);
+    const monStr = m[3].toLowerCase();
+    const hh = Number(m[4]);
+    const mm = Number(m[5]);
 
-  // Parse "Tue 30 Dec 20:00"
-  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
+    const monthMap = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    };
+    const monthIndex = monthMap[monStr];
+    if (monthIndex === undefined) return null;
 
-  const day = Number(m[2]);
-  const monStr = m[3].toLowerCase();
-  const hh = Number(m[4]);
-  const mm = Number(m[5]);
+    const nowParts = getAestNowParts(); // {year, month (0-11), ...} in AEST
+    const year = (monthIndex < nowParts.month) ? (nowParts.year + 1) : nowParts.year;
 
-  const monthMap = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-  };
-  const month = monthMap[monStr];
-  if (month === undefined) return null;
-
-  // Infer year based on AEST "now"
-  const nowParts = getAestNowParts();
-  const nowAest = dateFromAestLocal(nowParts.year, nowParts.month, nowParts.day, nowParts.hour, nowParts.minute);
-
-  // Candidate in current year
-  const candThisYear = dateFromAestLocal(nowParts.year, month, day, hh, mm);
-  // Candidate in next year
-  const candNextYear = dateFromAestLocal(nowParts.year + 1, month, day, hh, mm);
-
-  // Choose the first candidate that is not "too far" in the past.
-  // Rule: prefer this year unless it is earlier than now by more than 7 days.
-  const MS_DAY = 24 * 60 * 60 * 1000;
-  if (candThisYear.getTime() >= nowAest.getTime() - 7 * MS_DAY) {
-    return candThisYear;
+    return dateFromAestLocal(year, monthIndex, day, hh, mm);
   }
-  return candNextYear;
+
+  // ---- Case 1: ISO / explicit year formats only ----
+  // ISO-like (2025-12-30T...Z / with offset) OR contains a 4-digit year somewhere
+  const looksIso =
+    /^\d{4}-\d{2}-\d{2}/.test(s) || s.includes("T") || /Z$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s);
+  const hasYear = /\b(19|20)\d{2}\b/.test(s);
+
+  if (looksIso || hasYear) {
+    const dt = new Date(s);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  return null;
 }
 
 function parseHeaderCell(cell = "") {
@@ -348,7 +377,7 @@ async function main() {
     if (roiPct === null) continue;
 
     const eventDateObj = parseOpportunitiesEventDate(item?.date);
-    const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
+    const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
 
     const payload = {
       brand: {
