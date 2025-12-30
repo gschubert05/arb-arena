@@ -2,6 +2,8 @@ name: Render Social Posts
 
 on:
   workflow_dispatch:
+  schedule:
+      - cron: "0 23,3,9 * * *"
   push:
     branches: [data]
     paths:
