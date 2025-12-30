@@ -1,65 +1,142 @@
-// --- Theme toggle ---
-
 // ==== DIAGNOSTIC BANNER ====
-console.log("ARB app.js build 2025-11-12-09");
+console.log("ARB app.js build drop-in 2025-12-30");
 
 // --- Theme (fixed to dark) ---
 (() => {
+  // App theme is fixed to dark
   document.documentElement.classList.add('dark');
+  localStorage.setItem('theme', 'dark');
 })();
 
 // ONE consolidated style injection
 (() => {
   const css = `
-    /* --- Bookies dropdown: compact icons + checkbox spacing --- */
-    .bookie-icon-16 { width:18px; height:18px; border-radius:4px; flex:none; }
-    .chk-input { margin-right:.5rem; } /* keeps space between checkbox and label text */
+    /* --- Bookie chips (table) --- */
+    .stack{display:flex;flex-direction:column;gap:10px}
+    .bookie-chip{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      background:rgba(16,185,129,.12);
+      border:1px solid rgba(16,185,129,.18);
+      border-radius:14px;padding:8px 10px;
+    }
+    .dark .bookie-chip{ background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.22); }
+    .bookie-identity{ display:flex; align-items:center; gap:8px; min-width:0; }
+    .bookie-chip img{ width:18px; height:18px; border-radius:5px; flex:none; }
+    .bookie-name{ font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bookie-odds{ font-weight:800; min-width:3.5rem; text-align:right; font-variant-numeric:tabular-nums; }
 
-    /* --- Calculator styles (unchanged) --- */
+    /* --- Checkbox dropdown rows (filters) --- */
+    .chk-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    @media (max-width: 768px){ .chk-grid{ grid-template-columns:1fr; gap:10px; } }
+    .chk-row{
+      display:flex; align-items:center; gap:10px;
+      padding:12px 12px; border-radius:14px;
+      cursor:pointer; user-select:none;
+    }
+    .chk-row:hover{ background:rgba(255,255,255,.06); }
+    .chk-row input{ margin:0; }
+    .chk-row .chk-input{ margin-right:0; }
+    .bookie-icon-16{ width:18px; height:18px; border-radius:5px; flex:none; }
+    .chk-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    /* --- Min ROI slider: cleaner --- */
+    input[type="range"]{
+      -webkit-appearance:none; appearance:none;
+      height:6px; border-radius:999px;
+      background:rgba(148,163,184,.25);
+      outline:none;
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none; appearance:none;
+      width:16px; height:16px; border-radius:999px;
+      background:rgb(59 130 246);
+      border:2px solid rgba(255,255,255,.7);
+      box-shadow:0 4px 10px rgba(0,0,0,.25);
+      cursor:pointer;
+    }
+    input[type="range"]::-moz-range-thumb{
+      width:16px; height:16px; border-radius:999px;
+      background:rgb(59 130 246);
+      border:2px solid rgba(255,255,255,.7);
+      box-shadow:0 4px 10px rgba(0,0,0,.25);
+      cursor:pointer;
+    }
+
+    /* --- Calculator styles (updated) --- */
     .calc-card{
-      position:relative; display:grid; grid-template-columns:1fr auto; align-items:center; gap:16px;
-      border:1px solid rgb(226 232 240/1); border-radius:16px; padding:16px; background:var(--calc-bg,#fff); cursor:pointer;
+      position:relative; display:grid; grid-template-columns:1fr auto; align-items:center; gap:14px;
+      border:1px solid rgba(148,163,184,.25); border-radius:18px; padding:14px;
+      background:rgba(255,255,255,.04);
     }
-    .dark .calc-card{border-color:rgb(51 65 85/1);background:rgb(15 23 42/1)}
     .calc-left{display:flex;flex-direction:column;gap:6px;min-width:0}
-    .calc-top{display:flex;align-items:center;gap:.6rem}
+    .calc-top{display:flex;align-items:center;gap:10px;min-width:0}
     .calc-id img{width:22px;height:22px;border-radius:6px;flex:none}
-    .calc-id .name{font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-    .calc-odds{font-variant-numeric:tabular-nums;opacity:.9;font-weight:600}
-    .calc-stake{display:flex;align-items:center;gap:.5rem}
+    .calc-id .name{font-weight:800;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .calc-meta{font-size:.92rem;color:rgba(226,232,240,.72)}
+    .calc-meta b{color:rgba(226,232,240,.92)}
+    .calc-right{display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:260px}
+    .calc-oddsline{display:flex;align-items:center;gap:8px}
+    .calc-oddsline label{font-size:.9rem;color:rgba(226,232,240,.72)}
+    .calc-oddsline input{
+      width:96px;padding:.45rem .55rem;border-radius:12px;
+      border:1px solid rgba(148,163,184,.25);
+      background:rgba(2,6,23,.25); color:rgba(226,232,240,.95);
+      font-variant-numeric:tabular-nums;
+    }
+    .calc-stake{display:flex;align-items:center;gap:10px}
+    .calc-stake label{font-size:.9rem;color:rgba(226,232,240,.72)}
     .calc-stake input{
-      width:128px; padding:.45rem .6rem; border:1px solid rgb(203 213 225/1); border-radius:10px;
-      background:var(--calc-bg,#fff); font-size:.95rem;
+      width:120px; padding:.50rem .65rem; border-radius:12px;
+      border:1px solid rgba(148,163,184,.25);
+      background:rgba(2,6,23,.25); color:rgba(226,232,240,.95);
+      font-variant-numeric:tabular-nums;
     }
-    .dark .calc-stake input{border-color:rgb(71 85 105/1);background:rgb(30 41 59/1)}
-    .calc-copy{font-size:.78rem;padding:.4rem .6rem;border-radius:8px;background:rgb(241 245 249/1);cursor:pointer}
-    .dark .calc-copy{background:rgb(30 41 59/1)}
-    .calc-meta{font-size:.90rem;color:rgb(100 116 139/1)}
-    .dark .calc-meta{color:rgb(148 163 184/1)}
-    .calc-controls > div > label{margin-top:12px}
-    .calc-controls label{font-size:.95rem}
-    .calc-summary{
-      border-top:1px solid rgb(226 232 240/1); margin-top:18px; padding-top:14px;
-      display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between;
+    .calc-lock{
+      width:40px; height:36px; border-radius:12px;
+      border:1px solid rgba(148,163,184,.25);
+      background:rgba(255,255,255,.04); color:rgba(226,232,240,.9);
+      display:inline-flex; align-items:center; justify-content:center;
+      cursor:pointer;
     }
-    .dark .calc-summary{border-color:rgb(51 65 85/1)}
-    .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .6rem;border-radius:999px;background:rgb(241 245 249/1)}
-    .dark .pill{background:rgb(30 41 59/1)}
-    .pill b{font-variant-numeric:tabular-nums}
+    .calc-lock.active{ background:rgba(59,130,246,.18); border-color:rgba(59,130,246,.35); }
     .calc-dd{
-      position:absolute; right:16px; top:100%; margin-top:8px; min-width:280px; max-height:280px; overflow:auto;
-      background:var(--calc-bg,#fff); border:1px solid rgb(226 232 240/1); border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.25);
+      position:absolute; right:14px; top:100%; margin-top:8px;
+      width:min(340px, 88vw); max-height:280px; overflow:auto;
+      background:rgb(15 23 42);
+      border:1px solid rgba(148,163,184,.25);
+      border-radius:14px; box-shadow:0 14px 30px rgba(0,0,0,.35);
       z-index:2147483647;
     }
-    .dark .calc-dd{background:rgb(15 23 42/1);border-color:rgb(51 65 85/1)}
-    .calc-dd .opt{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; cursor:pointer;}
-    .calc-dd .opt:hover{background:rgb(241 245 249/1)}
-    .dark .calc-dd .opt:hover{background:rgb(30 41 59/1)}
-    .calc-dd .left{display:flex;align-items:center;gap:8px;min-width:0}
-    .calc-dd img{width:18px;height:18px;border-radius:4px;flex:none}
+    .calc-dd.hidden{display:none}
+    .calc-dd .opt{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; cursor:pointer; border-radius:12px;}
+    .calc-dd .opt:hover{background:rgba(255,255,255,.06)}
+    .calc-dd .left{display:flex;align-items:center;gap:10px;min-width:0}
+    .calc-dd img{width:18px;height:18px;border-radius:5px;flex:none}
     .calc-dd .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .calc-dd .odds{font-variant-numeric:tabular-nums;opacity:.9}
+
+    .calc-controls{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;}
+    @media (max-width: 640px){ .calc-controls{ grid-template-columns:1fr; } .calc-right{ min-width:0; } }
+    .calc-controls label{display:block; font-size:.92rem; color:rgba(226,232,240,.72); margin-bottom:6px}
+    .calc-controls input,.calc-controls select{
+      width:100%; padding:.6rem .7rem; border-radius:14px;
+      border:1px solid rgba(148,163,184,.25);
+      background:rgba(2,6,23,.25); color:rgba(226,232,240,.95);
+    }
+
+    .calc-summary{
+      border-top:1px solid rgba(148,163,184,.22);
+      margin-top:16px; padding-top:14px;
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+    }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:.45rem .7rem; border-radius:999px;
+      background:rgba(255,255,255,.06); border:1px solid rgba(148,163,184,.20);
+      font-size:.92rem;
+    }
+    .pill b{font-variant-numeric:tabular-nums}
+    .calc-hint{margin-top:8px; font-size:.9rem; color:rgba(226,232,240,.65)}
   `;
   const style = document.createElement('style');
   style.textContent = css;
@@ -146,8 +223,8 @@ function qs() {
   };
 
   // keep these server-side
-  addCsv(state.selectedSports,  state._sports,   'sports');
-  addCsv(state.selectedLeagues, state._leagues,  'leagues');
+  addCsv(state.selectedSports, state._sports, 'sports');
+  addCsv(state.selectedLeagues, state._leagues, 'leagues');
 
   return new URLSearchParams(params).toString();
 }
@@ -155,12 +232,12 @@ function qs() {
 // --- Sort indicators ---
 const ICONS = {
   both: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 4l3-3 3 3H3zm6 4l-3 3-3-3h6z" fill="currentColor"/></svg>',
-  up:   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 7l3-3 3 3H3z" fill="currentColor"/></svg>',
-  down: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>'
+  up: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 7l3-3 3 3H3z" fill="currentColor"/></svg>',
+  down: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M3 5l3 3 3-3H3z" fill="currentColor"/></svg>',
 };
 function renderSortIndicators() {
   const ths = document.querySelectorAll('thead [data-sort]');
-  ths.forEach(th => {
+  ths.forEach((th) => {
     const key = th.getAttribute('data-sort');
     let icon = th.querySelector('.sort-indicator');
     if (!icon) {
@@ -169,10 +246,12 @@ function renderSortIndicators() {
     }
     if (state.sortBy === key) {
       icon.innerHTML = state.sortDir === 'asc' ? ICONS.up : ICONS.down;
-      icon.classList.remove('opacity-60'); icon.classList.add('opacity-90');
+      icon.classList.remove('opacity-60');
+      icon.classList.add('opacity-90');
     } else {
       icon.innerHTML = ICONS.both;
-      icon.classList.remove('opacity-90'); icon.classList.add('opacity-60');
+      icon.classList.remove('opacity-90');
+      icon.classList.add('opacity-60');
     }
   });
 }
@@ -195,67 +274,28 @@ function logoFor(name) {
 // --- Date/time formatting ---
 function fmtWithTZ(iso) {
   if (!iso) return '';
-  const opts = { dateStyle:'medium', timeStyle:'short' };
+  const opts = { dateStyle: 'medium', timeStyle: 'short' };
   let tz = undefined;
   if (state.tz === 'AEST') tz = 'Australia/Brisbane';
   const fmt = new Intl.DateTimeFormat('en-AU', tz ? { ...opts, timeZone: tz } : opts);
-  try { return fmt.format(new Date(iso)); } catch { return iso; }
+  try {
+    return fmt.format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }
 
 // --- ROI & pairing helpers ---
 function roiFromOdds(a, b) {
-  const edge = (1 / a) + (1 / b);
-  if (edge >= 1) return -Infinity;   // not profitable
-  return (1 / edge) - 1;             // correct ROI
+  const edge = 1 / a + 1 / b;
+  if (edge >= 1) return -Infinity; // not profitable
+  return 1 / edge - 1; // correct ROI
 }
-function bestPairWithin(optionsLeft, optionsRight, allowedSetLeft, allowedSetRight) {
-  const L = allowedSetLeft ? optionsLeft.filter(o => allowedSetLeft.has(cleanAgencyName(o.agency))) : optionsLeft;
-  const R = allowedSetRight ? optionsRight.filter(o => allowedSetRight.has(cleanAgencyName(o.agency))) : optionsRight;
-  let best = null;
-  for (const a of L) {
-    const ao = Number(a.odds);
-    if (!(ao > 1)) continue;
-    for (const b of R) {
-      const bo = Number(b.odds);
-      if (!(bo > 1)) continue;
-      const roi = roiFromOdds(ao, bo);
-      if (roi > 0 && (!best || roi > best.roi)) best = { left: a, right: b, roi };
-    }
-  }
-  return best; // {left, right, roi} or null
+function requiredLeftOdds(bestRight) {
+  return 1 / (1 - 1 / Number(bestRight));
 }
-function requiredLeftOdds(bestRight) { return 1 / (1 - 1 / Number(bestRight)); }
-function requiredRightOdds(bestLeft) { return 1 / (1 - 1 / Number(bestLeft)); }
-function countProfitableOnLeft(optionsLeft, bestRight, allowedSetLeft){
-  if (!(bestRight > 1)) return 0;
-  const need = requiredLeftOdds(bestRight);
-  return optionsLeft.filter(o => (!allowedSetLeft || allowedSetLeft.has(cleanAgencyName(o.agency))) && Number(o.odds) >= need).length;
-}
-function countProfitableOnRight(optionsRight, bestLeft, allowedSetRight){
-  if (!(bestLeft > 1)) return 0;
-  const need = requiredRightOdds(bestLeft);
-  return optionsRight.filter(o => (!allowedSetRight || allowedSetRight.has(cleanAgencyName(o.agency))) && Number(o.odds) >= need).length;
-}
-
-// --- Bookies chips (legacy best-only renderer; we now override dynamically) ---
-function renderBestChips(bookTable) {
-  if (!bookTable || !bookTable.best) return '';
-  const left  = bookTable.best.left  || {};
-  const right = bookTable.best.right || {};
-  const chip = (agencyRaw, odds) => {
-    const agency = cleanAgencyName(agencyRaw || '');
-    if (!agency || odds == null) return '';
-    const oddsTxt = Number(odds).toFixed(2);
-    return `
-      <div class="bookie-chip">
-        <div class="bookie-identity min-w-0">
-          <img src="${logoFor(agency)}" alt="${agency}" onerror="this.src='/logos/placeholder.jpeg'">
-          <span class="bookie-name truncate">${agency}</span>
-        </div>
-        <span class="bookie-odds tabular-nums">${oddsTxt}</span>
-      </div>`;
-  };
-  return `<div class="flex flex-col gap-2">${chip(left.agency, left.odds)}${chip(right.agency, right.odds)}</div>`;
+function requiredRightOdds(bestLeft) {
+  return 1 / (1 - 1 / Number(bestLeft));
 }
 
 // --- Expanded odds table ---
@@ -264,12 +304,20 @@ function renderFullBookTable(it) {
   if (!t) return '';
   const headerL = t.headers?.[1] ?? 'Left';
   const headerR = t.headers?.[2] ?? 'Right';
-  const rowsHtml = (t.rows || []).map(r => {
-    const agency = cleanAgencyName(r.agency || '');
-    const isBestL = t.best?.left?.agency && cleanAgencyName(t.best.left.agency) === agency && Number(t.best.left.odds).toFixed(2) === Number(r.left).toFixed(2);
-    const isBestR = t.best?.right?.agency && cleanAgencyName(t.best.right.agency) === agency && Number(t.best.right.odds).toFixed(2) === Number(r.right).toFixed(2);
-    const mark = (v, on) => `<span class="px-2 py-0.5 rounded ${on ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : ''} tabular-nums">${v || ''}</span>`;
-    return `
+  const rowsHtml = (t.rows || [])
+    .map((r) => {
+      const agency = cleanAgencyName(r.agency || '');
+      const isBestL =
+        t.best?.left?.agency &&
+        cleanAgencyName(t.best.left.agency) === agency &&
+        Number(t.best.left.odds).toFixed(2) === Number(r.left).toFixed(2);
+      const isBestR =
+        t.best?.right?.agency &&
+        cleanAgencyName(t.best.right.agency) === agency &&
+        Number(t.best.right.odds).toFixed(2) === Number(r.right).toFixed(2);
+      const mark = (v, on) =>
+        `<span class="px-2 py-0.5 rounded ${on ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : ''} tabular-nums">${v || ''}</span>`;
+      return `
       <tr class="border-t border-slate-200 dark:border-slate-700">
         <td class="px-3 py-2"><div class="flex items-center gap-2">
           <img src="${logoFor(agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.jpeg'"><span>${agency}</span></div></td>
@@ -277,7 +325,8 @@ function renderFullBookTable(it) {
         <td class="px-3 py-2 text-right">${mark(r.right, isBestR)}</td>
         <td class="px-3 py-2 text-right text-slate-500 dark:text-slate-400">${r.updated || ''}</td>
       </tr>`;
-  }).join('');
+    })
+    .join('');
   return `
     <div class="bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700 p-3 mt-3">
       <div class="text-xs mb-2 text-slate-600 dark:text-slate-300">${(it.game || '')} — ${(it.market || '')}</div>
@@ -297,342 +346,480 @@ function renderFullBookTable(it) {
     </div>`;
 }
 
-// === Pop-up Calculator =======================================================
-// === Pop-up Calculator (NEW) =================================================
+// === Pop-up Calculator (updated) =============================================
 const Calc = (() => {
-  let overlay, modal, els = {}, ctx = null;
-  let mode = 'total'; // 'total' | 'A' | 'B'
+  let modal, overlay;
+  let els = {};
+  let ctx = {
+    oA: 1.9, oB: 1.9,
+    aName: '', bName: '',
+    aLogo: '', bLogo: '',
+    aBet: '', bBet: '',
+    optsA: [], optsB: []
+  };
+
+  // mode: 'auto' | 'lockA' | 'lockB'
+  let mode = 'auto';
 
   const fmtMoney = (v) => '$' + (Number(v) || 0).toFixed(2);
-  const roundTo = (x, step) => Math.round((Number(x) || 0) / step) * step;
 
-  function escapeHtml(s){
-    return String(s ?? '')
-      .replaceAll('&','&amp;')
-      .replaceAll('<','&lt;')
-      .replaceAll('>','&gt;')
-      .replaceAll('"','&quot;')
-      .replaceAll("'","&#039;");
+  function clampPos(n) { n = Number(n) || 0; return n < 0 ? 0 : n; }
+  function stepVal() { return Math.max(1, Number(els.round?.value) || 10); }
+
+  function snapToStep(x, step, how = 'nearest') {
+    step = Math.max(1, Number(step) || 10);
+    if (!Number.isFinite(x)) return 0;
+    const q = x / step;
+    if (how === 'floor') return Math.floor(q) * step;
+    if (how === 'ceil')  return Math.ceil(q) * step;
+    return Math.round(q) * step;
+  }
+
+  function setMode(next) {
+    mode = next;
+    if (!els.lockA || !els.lockB) return;
+    els.lockA.classList.toggle('active', mode === 'lockA');
+    els.lockB.classList.toggle('active', mode === 'lockB');
   }
 
   function ensureModal() {
     if (modal) return;
 
+    // Backdrop
     overlay = document.createElement('div');
-    overlay.className = 'calc-overlay';
-    overlay.addEventListener('mousedown', (e) => {
-      if (e.target === overlay) close(); // click outside closes
+    Object.assign(overlay.style, {
+      position: 'fixed', inset: '0',
+      background: 'rgba(0,0,0,0.55)',
+      zIndex: '2147483646',
+      display: 'none',
     });
+    overlay.addEventListener('click', close);
 
+    // Modal shell
     modal = document.createElement('div');
-    modal.className = 'calc-modal';
-    modal.setAttribute('role','dialog');
-    modal.setAttribute('aria-modal','true');
+    Object.assign(modal.style, {
+      position: 'fixed',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '94vw',
+      maxWidth: '720px',
+      maxHeight: '92vh',
+      borderRadius: '22px',
+      overflow: 'hidden',
+      border: '1px solid rgba(148,163,184,.25)',
+      boxShadow: '0 18px 60px rgba(0,0,0,.45)',
+      zIndex: '2147483647',
+      display: 'none',
+      background: 'rgb(15 23 42)',
+    });
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
 
     modal.innerHTML = `
-      <div class="calc-head">
-        <div>
-          <h3 class="calc-title" id="calcTitle">Calculator</h3>
-          <div class="calc-sub">Edit odds, choose rounding, lock a side to set its stake.</div>
+      <div style="display:flex;flex-direction:column;max-height:92vh;">
+        <div class="px-6 py-4 flex items-center justify-between border-b border-slate-700/70" style="background:rgba(2,6,23,.30);">
+          <div class="text-base font-semibold text-slate-100" id="calcTitle">Calculator</div>
+          <button id="calcClose" class="p-2 rounded hover:bg-white/10" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+              <path stroke="currentColor" stroke-width="2" d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
         </div>
-        <button class="calc-close" id="calcClose" type="button" aria-label="Close">✕</button>
+
+        <div id="calcBody" class="px-6 py-5" style="overflow:auto;">
+          <!-- Side A -->
+          <div id="cardA" class="calc-card">
+            <div class="calc-left">
+              <div class="calc-top">
+                <div class="calc-id"><img id="calcAlogo" src="/logos/placeholder.jpeg" alt=""></div>
+                <div class="name" id="calcAname">Side A</div>
+              </div>
+              <div class="calc-meta">Bet: <b id="calcAbet"></b></div>
+              <div class="calc-meta">Payout: <b id="calcApayout" class="tabular-nums"></b></div>
+            </div>
+            <div class="calc-right">
+              <div class="calc-oddsline">
+                <label for="calcAoddsInput">Odds</label>
+                <input id="calcAoddsInput" type="number" min="1.01" step="0.01" inputmode="decimal">
+              </div>
+              <div class="calc-stake">
+                <label for="calcAstake">Stake</label>
+                <input id="calcAstake" type="number" step="1" min="0" inputmode="numeric">
+                <button id="lockA" class="calc-lock" type="button" title="Lock this stake">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+                    <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="ddA" class="calc-dd hidden"></div>
+            </div>
+          </div>
+
+          <!-- Side B -->
+          <div id="cardB" class="calc-card" style="margin-top:12px">
+            <div class="calc-left">
+              <div class="calc-top">
+                <div class="calc-id"><img id="calcBlogo" src="/logos/placeholder.jpeg" alt=""></div>
+                <div class="name" id="calcBname">Side B</div>
+              </div>
+              <div class="calc-meta">Bet: <b id="calcBbet"></b></div>
+              <div class="calc-meta">Payout: <b id="calcBpayout" class="tabular-nums"></b></div>
+            </div>
+            <div class="calc-right">
+              <div class="calc-oddsline">
+                <label for="calcBoddsInput">Odds</label>
+                <input id="calcBoddsInput" type="number" min="1.01" step="0.01" inputmode="decimal">
+              </div>
+              <div class="calc-stake">
+                <label for="calcBstake">Stake</label>
+                <input id="calcBstake" type="number" step="1" min="0" inputmode="numeric">
+                <button id="lockB" class="calc-lock" type="button" title="Lock this stake">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+                    <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="ddB" class="calc-dd hidden"></div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="calc-controls">
+            <div>
+              <label for="calcMaxStake">Max total stake</label>
+              <input id="calcMaxStake" type="number" step="10" min="0" value="1000">
+            </div>
+            <div>
+              <label for="calcRound">Rounding</label>
+              <select id="calcRound">
+                <option value="10">Nearest $10</option>
+                <option value="5">Nearest $5</option>
+                <option value="1">Nearest $1</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Summary -->
+          <div class="calc-summary">
+            <div class="flex flex-wrap gap-2">
+              <span class="pill">Total stake <b id="calcTotal" class="tabular-nums"></b></span>
+              <span class="pill">Min payout <b id="calcMinPayout" class="tabular-nums"></b></span>
+              <span class="pill"><span id="profitLabel"></span><b id="calcProfit" class="tabular-nums"></b></span>
+            </div>
+          </div>
+          <div class="calc-hint" id="calcHint"></div>
+        </div>
       </div>
-
-      <div class="calc-body">
-        <div class="calc-legs">
-          <!-- A -->
-          <div class="leg-card" id="legA">
-            <div class="leg-top">
-              <div class="leg-id" id="pickA">
-                <img id="calcAlogo" src="/logos/placeholder.jpeg" alt="">
-                <div style="min-width:0">
-                  <div class="leg-name" id="calcAname">Side A</div>
-                  <div class="leg-bet">Bet: <span id="calcAbet"></span></div>
-                </div>
-              </div>
-              <div class="leg-actions">
-                <button class="swap-btn" id="changeA" type="button">Change</button>
-                <button class="lock-btn" id="lockA" type="button">Lock stake</button>
-              </div>
-            </div>
-
-            <div class="leg-fields">
-              <div>
-                <div class="flabel">Odds</div>
-                <input class="fin" id="calcAoddsIn" inputmode="decimal" />
-              </div>
-              <div>
-                <div class="flabel">Stake</div>
-                <input class="fin" id="calcAstake" inputmode="numeric" />
-              </div>
-            </div>
-
-            <div class="payout-row">
-              <div>Payout: <b id="calcApayout" class="tabular-nums">$0.00</b></div>
-              <div></div>
-            </div>
-
-            <div id="ddA" class="calc-dd hidden"></div>
-          </div>
-
-          <!-- B -->
-          <div class="leg-card" id="legB">
-            <div class="leg-top">
-              <div class="leg-id" id="pickB">
-                <img id="calcBlogo" src="/logos/placeholder.jpeg" alt="">
-                <div style="min-width:0">
-                  <div class="leg-name" id="calcBname">Side B</div>
-                  <div class="leg-bet">Bet: <span id="calcBbet"></span></div>
-                </div>
-              </div>
-              <div class="leg-actions">
-                <button class="swap-btn" id="changeB" type="button">Change</button>
-                <button class="lock-btn" id="lockB" type="button">Lock stake</button>
-              </div>
-            </div>
-
-            <div class="leg-fields">
-              <div>
-                <div class="flabel">Odds</div>
-                <input class="fin" id="calcBoddsIn" inputmode="decimal" />
-              </div>
-              <div>
-                <div class="flabel">Stake</div>
-                <input class="fin" id="calcBstake" inputmode="numeric" />
-              </div>
-            </div>
-
-            <div class="payout-row">
-              <div>Payout: <b id="calcBpayout" class="tabular-nums">$0.00</b></div>
-              <div></div>
-            </div>
-
-            <div id="ddB" class="calc-dd hidden"></div>
-          </div>
-        </div>
-
-        <div class="calc-controls">
-          <div class="ctrl-card">
-            <div class="flabel">Max stake (total)</div>
-            <input class="fin" id="calcMaxStake" inputmode="numeric" value="1000">
-          </div>
-          <div class="ctrl-card">
-            <div class="flabel">Rounding</div>
-            <select class="fin" id="calcRound">
-              <option value="10">Nearest $10</option>
-              <option value="5">Nearest $5</option>
-              <option value="1">Nearest $1</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary">
-        <div>
-          Total: <b id="calcTotal" class="tabular-nums">$0.00</b>
-          &nbsp;&nbsp;•&nbsp;&nbsp;
-          Min payout: <b id="calcMinPayout" class="tabular-nums">$0.00</b>
-          &nbsp;&nbsp;•&nbsp;&nbsp;
-          <span id="profitLabel">Profit (0.00%):</span> <b id="calcProfit" class="tabular-nums">$0.00</b>
-        </div>
-        <div style="color:rgba(148,163,184,.92)" id="calcModeText">Mode: Total stake</div>
-      </div>
-      <div class="summary-note" id="calcHint"></div>
     `;
 
-    overlay.appendChild(modal);
     document.body.appendChild(overlay);
+    document.body.appendChild(modal);
 
+    // wire elements
     els = {
       title: modal.querySelector('#calcTitle'),
       close: modal.querySelector('#calcClose'),
 
-      maxStake: modal.querySelector('#calcMaxStake'),
-      round: modal.querySelector('#calcRound'),
+      cardA: modal.querySelector('#cardA'),
+      cardB: modal.querySelector('#cardB'),
+      ddA: modal.querySelector('#ddA'),
+      ddB: modal.querySelector('#ddB'),
 
       Aname: modal.querySelector('#calcAname'),
-      Alogo: modal.querySelector('#calcAlogo'),
-      Abet:  modal.querySelector('#calcAbet'),
-      AoddsIn: modal.querySelector('#calcAoddsIn'),
-      Astake:  modal.querySelector('#calcAstake'),
-      Apayout: modal.querySelector('#calcApayout'),
-      ddA: modal.querySelector('#ddA'),
-      changeA: modal.querySelector('#changeA'),
-      lockA: modal.querySelector('#lockA'),
-
-      Bname: modal.querySelector('#calcBname'),
       Blogo: modal.querySelector('#calcBlogo'),
-      Bbet:  modal.querySelector('#calcBbet'),
-      BoddsIn: modal.querySelector('#calcBoddsIn'),
-      Bstake:  modal.querySelector('#calcBstake'),
-      Bpayout: modal.querySelector('#calcBpayout'),
-      ddB: modal.querySelector('#ddB'),
-      changeB: modal.querySelector('#changeB'),
+      Alogo: modal.querySelector('#calcAlogo'),
+      Bname: modal.querySelector('#calcBname'),
+      Abet: modal.querySelector('#calcAbet'),
+      Bbet: modal.querySelector('#calcBbet'),
+
+      AoddsIn: modal.querySelector('#calcAoddsInput'),
+      BoddsIn: modal.querySelector('#calcBoddsInput'),
+
+      Astake: modal.querySelector('#calcAstake'),
+      Bstake: modal.querySelector('#calcBstake'),
+      lockA: modal.querySelector('#lockA'),
       lockB: modal.querySelector('#lockB'),
+
+      Apayout: modal.querySelector('#calcApayout'),
+      Bpayout: modal.querySelector('#calcBpayout'),
+
+      maxStake: modal.querySelector('#calcMaxStake'),
+      round: modal.querySelector('#calcRound'),
 
       total: modal.querySelector('#calcTotal'),
       minPayout: modal.querySelector('#calcMinPayout'),
       profit: modal.querySelector('#calcProfit'),
       profitLabel: modal.querySelector('#profitLabel'),
       hint: modal.querySelector('#calcHint'),
-      modeText: modal.querySelector('#calcModeText'),
     };
 
-    els.close.addEventListener('click', close);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-
-    // Persist + restore rounding/max stake
+    // Persist + restore rounding and max stake
     const savedRound = localStorage.getItem('calcRoundStep');
     if (savedRound && ['1','5','10'].includes(savedRound)) els.round.value = savedRound;
+
+    const savedMax = localStorage.getItem('calcMaxStake');
+    if (savedMax && !Number.isNaN(Number(savedMax))) els.maxStake.value = savedMax;
+
     els.round.addEventListener('change', () => {
       localStorage.setItem('calcRoundStep', String(els.round.value || ''));
       recalc();
     });
-
-    const savedMax = localStorage.getItem('calcMaxStake');
-    if (savedMax && !Number.isNaN(Number(savedMax))) els.maxStake.value = savedMax;
     els.maxStake.addEventListener('change', () => {
       localStorage.setItem('calcMaxStake', String(els.maxStake.value || ''));
       recalc();
     });
 
-    // odds edits
-    els.AoddsIn.addEventListener('input', () => { mode = 'total'; syncModeUI(); recalc(); });
-    els.BoddsIn.addEventListener('input', () => { mode = 'total'; syncModeUI(); recalc(); });
+    // close handlers
+    els.close.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
-    // stake edits => lock that side
-    els.Astake.addEventListener('input', () => { mode = 'A'; syncModeUI(); recalc(); });
-    els.Bstake.addEventListener('input', () => { mode = 'B'; syncModeUI(); recalc(); });
+    // lock buttons
+    els.lockA.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setMode(mode === 'lockA' ? 'auto' : 'lockA');
+      recalc();
+    });
+    els.lockB.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setMode(mode === 'lockB' ? 'auto' : 'lockB');
+      recalc();
+    });
 
-    // lock buttons toggle
-    els.lockA.addEventListener('click', () => { mode = (mode === 'A') ? 'total' : 'A'; syncModeUI(); recalc(); });
-    els.lockB.addEventListener('click', () => { mode = (mode === 'B') ? 'total' : 'B'; syncModeUI(); recalc(); });
+    // Stake inputs: typing locks that side
+    els.Astake.addEventListener('input', () => { setMode('lockA'); recalc(); });
+    els.Bstake.addEventListener('input', () => { setMode('lockB'); recalc(); });
 
-    // open dropdowns
-    els.changeA.addEventListener('click', (e) => { e.stopPropagation(); toggleDD('A'); });
-    els.changeB.addEventListener('click', (e) => { e.stopPropagation(); toggleDD('B'); });
+    // snap to step on blur
+    els.Astake.addEventListener('blur', () => { els.Astake.value = String(snapToStep(clampPos(els.Astake.value), stepVal())); recalc(); });
+    els.Bstake.addEventListener('blur', () => { els.Bstake.value = String(snapToStep(clampPos(els.Bstake.value), stepVal())); recalc(); });
 
-    // click anywhere inside modal closes dropdowns unless inside
+    // Odds inputs: live update
+    els.AoddsIn.addEventListener('input', () => {
+      const v = Number(els.AoddsIn.value);
+      if (Number.isFinite(v) && v > 1) ctx.oA = v;
+      recalc();
+    });
+    els.BoddsIn.addEventListener('input', () => {
+      const v = Number(els.BoddsIn.value);
+      if (Number.isFinite(v) && v > 1) ctx.oB = v;
+      recalc();
+    });
+
+    // Open dropdown by clicking the whole card (ignore stake/lock/odds/dropdown itself)
+    els.cardA.addEventListener('click', (e) => {
+      if (e.target.closest('.calc-stake') || e.target.closest('.calc-oddsline') || e.target.closest('.calc-dd')) return;
+      toggleDD('A');
+    });
+    els.cardB.addEventListener('click', (e) => {
+      if (e.target.closest('.calc-stake') || e.target.closest('.calc-oddsline') || e.target.closest('.calc-dd')) return;
+      toggleDD('B');
+    });
+
+    // click outside dropdowns closes them
     modal.addEventListener('click', (e) => {
-      const inA = e.target.closest('#ddA') || e.target.closest('#changeA');
-      const inB = e.target.closest('#ddB') || e.target.closest('#changeB');
+      const inA = e.target.closest('#ddA') || e.target.closest('#cardA');
+      const inB = e.target.closest('#ddB') || e.target.closest('#cardB');
       if (!inA) els.ddA.classList.add('hidden');
       if (!inB) els.ddB.classList.add('hidden');
     });
   }
 
-  function show() { overlay.classList.add('open'); }
-  function close(){ overlay.classList.remove('open'); }
-
-  function syncModeUI(){
-    els.lockA.classList.toggle('active', mode === 'A');
-    els.lockB.classList.toggle('active', mode === 'B');
-    els.lockA.textContent = mode === 'A' ? 'Locked' : 'Lock stake';
-    els.lockB.textContent = mode === 'B' ? 'Locked' : 'Lock stake';
-    els.modeText.textContent =
-      mode === 'total' ? 'Mode: Total stake' :
-      mode === 'A' ? 'Mode: Locked A stake' : 'Mode: Locked B stake';
+  function show() {
+    overlay.style.display = 'block';
+    modal.style.display = 'block';
+  }
+  function close() {
+    if (overlay) overlay.style.display = 'none';
+    if (modal) modal.style.display = 'none';
   }
 
-  // core math (same idea as your old one)
+  // --- core math (AUTO) ---
   function searchRounded(oA, oB, maxStake, step) {
     const stepAmt = Math.max(1, Number(step) || 10);
-    const start = Math.floor((Math.max(0, Math.floor(maxStake))) / stepAmt) * stepAmt;
-    const minTotal = Math.max(0, start - 100);
+    const start = Math.floor(Math.max(0, Math.floor(maxStake)) / stepAmt) * stepAmt;
+    const minTotal = Math.max(0, start - 200);
+
     const equalize = (total) => {
       const T = total / (1 / oA + 1 / oB);
       return { sA: T / oA, sB: T / oB };
     };
 
-    function scoreCandidate(total, rA, rB) {
-      if (rA < 0 || rB < 0) return null;
-      if ((rA + rB) > total) return null;
-      const payoutA = rA * oA, payoutB = rB * oB, used = rA + rB;
+    const score = (rA, rB) => {
+      const payoutA = rA * oA, payoutB = rB * oB;
+      const used = rA + rB;
       const minPayout = Math.min(payoutA, payoutB);
       const profit = minPayout - used;
       const diff = Math.abs(payoutA - payoutB);
-      const score = profit * 1e9 + used * 1e3 - diff;
-      return { total, rA, rB, payoutA, payoutB, used, minPayout, profit, diff, score };
-    }
-    function shaveToFit(total, rA, rB) {
-      while (rA + rB > total) {
-        const tryA = (rA >= stepAmt) ? scoreCandidate(total, rA - stepAmt, rB) : null;
-        const tryB = (rB >= stepAmt) ? scoreCandidate(total, rA, rB - stepAmt) : null;
-        if (!tryA && !tryB) break;
-        if (!tryB || (tryA && tryA.minPayout >= tryB.minPayout)) rA -= stepAmt; else rB -= stepAmt;
-      }
-      return { rA: Math.max(0, rA), rB: Math.max(0, rB) };
-    }
-    function topUpToTotal(total, rA, rB) {
-      while (rA + rB + stepAmt <= total) {
-        const addA = scoreCandidate(total, rA + stepAmt, rB);
-        const addB = scoreCandidate(total, rA, rB + stepAmt);
-        const pickA = addA && (!addB || addA.minPayout > addB.minPayout ||
-          (addA.minPayout === addB.minPayout && addA.diff < addB.diff));
-        if (pickA) rA += stepAmt;
-        else if (addB) rB += stepAmt;
-        else break;
-      }
-      return { rA, rB };
-    }
+      return { payoutA, payoutB, used, minPayout, profit, diff, score: profit * 1e9 - diff };
+    };
 
     let best = null;
+
     for (let total = start; total >= minTotal; total -= stepAmt) {
       if (total <= 0) break;
+
       const { sA, sB } = equalize(total);
-      let rA = roundTo(sA, stepAmt), rB = roundTo(sB, stepAmt);
-      ({ rA, rB } = shaveToFit(total, rA, rB));
-      ({ rA, rB } = topUpToTotal(total, rA, rB));
-      const cand = scoreCandidate(total, rA, rB);
-      if (cand && (!best || cand.score > best.score)) best = cand;
+
+      // small candidate set around rounded values
+      const baseA = snapToStep(sA, stepAmt, 'nearest');
+      const baseB = snapToStep(sB, stepAmt, 'nearest');
+
+      const candidates = [];
+      const tries = [baseA - stepAmt, baseA, baseA + stepAmt, baseA + 2 * stepAmt].filter(x => x >= 0);
+      for (const rA of tries) {
+        const rBraw = total - rA;
+        const rB = snapToStep(rBraw, stepAmt, 'nearest');
+        if (rA + rB > total) continue;
+        candidates.push({ rA, rB, ...score(rA, rB) });
+      }
+
+      // fallback: perfect split rounding
+      candidates.push({ rA: baseA, rB: baseB, ...score(baseA, baseB) });
+
+      for (const c of candidates) {
+        if (!best || c.score > best.score) best = c;
+      }
     }
-    return best || { total: 0, rA: 0, rB: 0, payoutA: 0, payoutB: 0, minPayout: 0, profit: 0, diff: Infinity, score: -Infinity };
+
+    if (!best) best = { rA: 0, rB: 0, payoutA: 0, payoutB: 0, used: 0, minPayout: 0, profit: 0, diff: 0 };
+    return best;
   }
 
-  function solveOtherForEqualPayout(lockedStake, lockedOdds, otherOdds){
-    if (!(lockedOdds > 1) || !(otherOdds > 1)) return 0;
-    return (lockedStake * lockedOdds) / otherOdds;
+  // --- core math (LOCKED side) ---
+  function computeOtherFromLocked(whichLocked) {
+    const step = stepVal();
+    const oA = Number(ctx.oA), oB = Number(ctx.oB);
+    if (!(oA > 1) || !(oB > 1)) return;
+
+    const sA = clampPos(Number(els.Astake.value));
+    const sB = clampPos(Number(els.Bstake.value));
+
+    let fixedStake = whichLocked === 'A' ? sA : sB;
+    fixedStake = snapToStep(fixedStake, step, 'nearest');
+
+    // keep the fixed side snapped too
+    if (whichLocked === 'A') els.Astake.value = String(fixedStake);
+    else els.Bstake.value = String(fixedStake);
+
+    const fixedOdds = whichLocked === 'A' ? oA : oB;
+    const otherOdds = whichLocked === 'A' ? oB : oA;
+
+    const targetPayout = fixedStake * fixedOdds;
+    const otherRaw = otherOdds > 0 ? (targetPayout / otherOdds) : 0;
+
+    const candidates = [];
+    const base = snapToStep(otherRaw, step, 'nearest');
+    for (let k = -3; k <= 3; k++) {
+      const stake = Math.max(0, base + k * step);
+      const payoutFixed = targetPayout;
+      const payoutOther = stake * otherOdds;
+      const total = fixedStake + stake;
+      const minP = Math.min(payoutFixed, payoutOther);
+      const profit = minP - total;
+      const diff = Math.abs(payoutFixed - payoutOther);
+      candidates.push({ stake, total, profit, diff, minP, payoutFixed, payoutOther });
+    }
+
+    // choose best: profit desc, then diff asc, then total desc
+    candidates.sort((a, b) =>
+      (b.profit - a.profit) ||
+      (a.diff - b.diff) ||
+      (b.total - a.total)
+    );
+    const best = candidates[0];
+
+    if (whichLocked === 'A') els.Bstake.value = String(best.stake);
+    else els.Astake.value = String(best.stake);
+  }
+
+  function updateSummary() {
+    const oA = Number(ctx.oA), oB = Number(ctx.oB);
+    const sA = clampPos(Number(els.Astake.value));
+    const sB = clampPos(Number(els.Bstake.value));
+
+    const payoutA = sA * oA;
+    const payoutB = sB * oB;
+    const total = sA + sB;
+    const minPayout = Math.min(payoutA, payoutB);
+    const profit = minPayout - total;
+    const roiPct = total > 0 ? (profit / total) * 100 : 0;
+
+    els.Apayout.textContent = fmtMoney(payoutA);
+    els.Bpayout.textContent = fmtMoney(payoutB);
+
+    els.total.textContent = fmtMoney(total);
+    els.minPayout.textContent = fmtMoney(minPayout);
+    els.profitLabel.textContent = `Profit (${roiPct.toFixed(2)}%): `;
+    els.profit.textContent = fmtMoney(profit);
+
+    // hint + warnings
+    const maxStake = clampPos(Number(els.maxStake.value));
+    if (total > maxStake && maxStake > 0) {
+      els.hint.textContent = `Total stake exceeds Max total stake by ${fmtMoney(total - maxStake)}.`;
+    } else {
+      const step = stepVal();
+      if (mode === 'auto') els.hint.textContent = `Auto split using $${step} rounding. Click a lock to set one side manually.`;
+      if (mode === 'lockA') els.hint.textContent = `Locked ${ctx.aName || 'Side A'} stake. Adjust odds or stake; other side follows ($${step} rounding).`;
+      if (mode === 'lockB') els.hint.textContent = `Locked ${ctx.bName || 'Side B'} stake. Adjust odds or stake; other side follows ($${step} rounding).`;
+    }
+  }
+
+  function recalc() {
+    const oA = Number(ctx.oA), oB = Number(ctx.oB);
+    if (!(oA > 1) || !(oB > 1)) { updateSummary(); return; }
+
+    const step = stepVal();
+    const maxStake = clampPos(Number(els.maxStake.value) || 1000);
+
+    if (mode === 'auto') {
+      const best = searchRounded(oA, oB, maxStake, step);
+      els.Astake.value = String(best.rA ?? 0);
+      els.Bstake.value = String(best.rB ?? 0);
+    } else if (mode === 'lockA') {
+      computeOtherFromLocked('A');
+    } else if (mode === 'lockB') {
+      computeOtherFromLocked('B');
+    }
+
+    updateSummary();
   }
 
   function renderOptions(listEl, options, side) {
     const sorted = (options || [])
       .slice()
       .filter(o => Number(o.odds) > 1)
-      .sort((a,b) => Number(b.odds || 0) - Number(a.odds || 0));
+      .sort((a, b) => Number(b.odds || 0) - Number(a.odds || 0)); // DESC by odds
 
     listEl.innerHTML = sorted.map(o => `
-      <div class="calc-opt" data-agency="${escapeHtml(o.agency)}" data-odds="${Number(o.odds)}">
-        <div class="calc-opt-left">
+      <div class="opt" data-agency="${(o.agency || '').replace(/"/g,'&quot;')}" data-odds="${o.odds}">
+        <div class="left">
           <img src="${logoFor(o.agency)}" onerror="this.src='/logos/placeholder.jpeg'">
-          <div class="name">${escapeHtml(o.agency)}</div>
+          <div class="name">${o.agency}</div>
         </div>
         <div class="odds">${(Number(o.odds)||0).toFixed(2)}</div>
       </div>
     `).join('');
 
-    listEl.querySelectorAll('.calc-opt').forEach(opt => {
+    listEl.querySelectorAll('.opt').forEach(opt => {
       opt.addEventListener('click', (e) => {
         e.stopPropagation();
-        const agency = opt.getAttribute('data-agency');
+        const agency = opt.getAttribute('data-agency') || '';
         const odds = Number(opt.getAttribute('data-odds') || '0');
 
         if (side === 'A') {
           ctx.aName = agency; ctx.oA = odds;
           els.Aname.textContent = agency; els.Alogo.src = logoFor(agency);
-          els.AoddsIn.value = odds.toFixed(2);
+          els.AoddsIn.value = (odds > 0 ? odds.toFixed(2) : '');
         } else {
           ctx.bName = agency; ctx.oB = odds;
           els.Bname.textContent = agency; els.Blogo.src = logoFor(agency);
-          els.BoddsIn.value = odds.toFixed(2);
+          els.BoddsIn.value = (odds > 0 ? odds.toFixed(2) : '');
         }
 
-        // switching odds should return to total mode unless you’re actively locked
-        if (mode === 'A' || mode === 'B') {
-          // keep lock mode, but recompute other side
-        } else {
-          mode = 'total';
-          syncModeUI();
-        }
+        // keep current mode; just recompute
         recalc();
         listEl.classList.add('hidden');
       });
@@ -646,114 +833,49 @@ const Calc = (() => {
     open.classList.toggle('hidden');
   }
 
-  function recalc(){
-    if (!ctx) return;
-
-    const step = Math.max(1, Number(els.round.value) || 10);
-    const maxStake = Math.max(0, Number(els.maxStake.value) || 1000);
-
-    // read odds inputs (user-editable)
-    const oA = Math.max(1.01, Number(els.AoddsIn.value) || ctx.oA || 1.9);
-    const oB = Math.max(1.01, Number(els.BoddsIn.value) || ctx.oB || 1.9);
-    ctx.oA = oA; ctx.oB = oB;
-
-    let sA = Math.max(0, Number(els.Astake.value) || 0);
-    let sB = Math.max(0, Number(els.Bstake.value) || 0);
-
-    if (mode === 'total'){
-      const res = searchRounded(oA, oB, maxStake, step);
-      sA = Math.max(0, Math.round(res.rA));
-      sB = Math.max(0, Math.round(res.rB));
-      els.Astake.value = sA;
-      els.Bstake.value = sB;
-      els.hint.textContent = `Checked totals from $${Math.floor(maxStake)} down $${Math.min(100, Math.floor(maxStake))} using $${step} steps; stakes are exact $${step} multiples.`;
-    } else if (mode === 'A'){
-      sA = roundTo(sA, step);
-      let wantB = solveOtherForEqualPayout(sA, oA, oB);
-      sB = roundTo(wantB, step);
-
-      // cap by maxStake (reduce locked side if needed)
-      while (sA + sB > maxStake && sA > 0){
-        sA = Math.max(0, sA - step);
-        sB = roundTo(solveOtherForEqualPayout(sA, oA, oB), step);
-      }
-
-      els.Astake.value = sA;
-      els.Bstake.value = sB;
-      els.hint.textContent = `A stake locked (rounded to $${step}); B matched to equal payout and rounded.`;
-    } else if (mode === 'B'){
-      sB = roundTo(sB, step);
-      let wantA = solveOtherForEqualPayout(sB, oB, oA);
-      sA = roundTo(wantA, step);
-
-      while (sA + sB > maxStake && sB > 0){
-        sB = Math.max(0, sB - step);
-        sA = roundTo(solveOtherForEqualPayout(sB, oB, oA), step);
-      }
-
-      els.Astake.value = sA;
-      els.Bstake.value = sB;
-      els.hint.textContent = `B stake locked (rounded to $${step}); A matched to equal payout and rounded.`;
-    }
-
-    // summary
-    const payoutA = sA * oA;
-    const payoutB = sB * oB;
-    const total = sA + sB;
-    const minPayout = Math.min(payoutA, payoutB);
-    const profit = minPayout - total;
-    const roiPct = total > 0 ? (profit / total) * 100 : 0;
-
-    els.Apayout.textContent = fmtMoney(payoutA);
-    els.Bpayout.textContent = fmtMoney(payoutB);
-    els.total.textContent = fmtMoney(total);
-    els.minPayout.textContent = fmtMoney(minPayout);
-    els.profitLabel.textContent = `Profit (${roiPct.toFixed(2)}%):`;
-    els.profit.textContent = fmtMoney(profit);
-  }
-
-  function openCalc({ aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet='', bBet='', maxStake=1000, optionsA=[], optionsB=[] }) {
+  function openCalc({ aName, bName, aOdds, bOdds, aLogo, bLogo, title, aBet = '', bBet = '', maxStake = 1000, optionsA = [], optionsB = [] }) {
     ensureModal();
 
     ctx = {
-      aName: aName || 'Side A',
-      bName: bName || 'Side B',
       oA: Number(aOdds) || 1.9,
       oB: Number(bOdds) || 1.9,
-      optsA: optionsA.slice(),
-      optsB: optionsB.slice(),
+      aName: aName || 'Side A',
+      bName: bName || 'Side B',
+      aLogo: aLogo || '/logos/placeholder.jpeg',
+      bLogo: bLogo || '/logos/placeholder.jpeg',
+      aBet, bBet,
+      optsA: (optionsA || []).slice(),
+      optsB: (optionsB || []).slice(),
     };
 
     els.title.textContent = title || 'Calculator';
 
     els.Aname.textContent = ctx.aName;
     els.Bname.textContent = ctx.bName;
-    els.Alogo.src = aLogo || '/logos/placeholder.jpeg';
-    els.Blogo.src = bLogo || '/logos/placeholder.jpeg';
-    els.Abet.textContent = aBet;
-    els.Bbet.textContent = bBet;
+    els.Alogo.src = ctx.aLogo;
+    els.Blogo.src = ctx.bLogo;
+    els.Abet.textContent = aBet || '';
+    els.Bbet.textContent = bBet || '';
 
-    // restore persisted values
+    els.AoddsIn.value = (ctx.oA > 0 ? ctx.oA.toFixed(2) : '');
+    els.BoddsIn.value = (ctx.oB > 0 ? ctx.oB.toFixed(2) : '');
+
+    // Restore persisted values where possible
     const savedMax = localStorage.getItem('calcMaxStake');
-    els.maxStake.value = (savedMax && !Number.isNaN(Number(savedMax))) ? savedMax : String(maxStake);
+    els.maxStake.value = (savedMax && !Number.isNaN(Number(savedMax)))
+      ? savedMax
+      : String(maxStake || els.maxStake.value || 1000);
 
     const savedRound = localStorage.getItem('calcRoundStep');
-    if (savedRound && ['1','5','10'].includes(savedRound)) els.round.value = savedRound;
+    if (savedRound && ['1', '5', '10'].includes(savedRound)) els.round.value = savedRound;
 
-    // set odds inputs
-    els.AoddsIn.value = ctx.oA.toFixed(2);
-    els.BoddsIn.value = ctx.oB.toFixed(2);
-
-    // dropdown options
     renderOptions(els.ddA, ctx.optsA, 'A');
     renderOptions(els.ddB, ctx.optsB, 'B');
 
-    // reset mode to total on open
-    mode = 'total';
-    syncModeUI();
-
-    // compute stakes
+    // reset mode to auto on open
+    setMode('auto');
     recalc();
+
     show();
   }
 
@@ -805,6 +927,7 @@ function isInteractive(el) {
 // --- Generic checkbox panel renderer (with bookie icons) ---
 function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, onChange }) {
   wrapEl.innerHTML = '';
+  wrapEl.classList.add('chk-grid');
 
   // treat "All" as selected (empty set) when Select all is on or everything is selected
   const treatAllSelected = (selectAllEl.checked === true) && (selectedSet.size === 0 || selectedSet.size >= items.length);
@@ -814,19 +937,18 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
     const isChecked = treatAllSelected ? true : selectedSet.has(v);
 
     const row = document.createElement('label');
-    row.className = "inline-flex items-center p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800";
-    // We’ll manage spacing via .chk-input (margin-right) so the other panels don’t get scrunched.
-    // Only Bookies rows get an icon.
+    row.className = 'chk-row';
+
     if (allKey === 'bookie') {
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded chk-input" ${isChecked ? 'checked' : ''} data-val="${v}">
         <img src="${logoFor(v)}" alt="" class="bookie-icon-16" onerror="this.src='/logos/placeholder.jpeg'">
-        <span class="truncate ml-2">${v}</span>
+        <span class="chk-name">${v}</span>
       `;
     } else {
       row.innerHTML = `
         <input type="checkbox" id="${id}" class="rounded chk-input" ${isChecked ? 'checked' : ''} data-val="${v}">
-        <span class="truncate">${v}</span>
+        <span class="chk-name">${v}</span>
       `;
     }
 
@@ -840,9 +962,11 @@ function renderCheckboxPanel({ items, wrapEl, selectAllEl, selectedSet, allKey, 
   wrapEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const val = cb.getAttribute('data-val');
+
       // if "select all" was visually on but set is empty, seed the set with all items first
       if (selectAllEl.checked === true && selectedSet.size === 0) items.forEach(v => selectedSet.add(v));
-      if (cb.checked) selectedSet.add(val); else selectedSet.delete(val);
+      if (cb.checked) selectedSet.add(val);
+      else selectedSet.delete(val);
 
       // If everything is selected, collapse to "All"
       if (selectedSet.size >= items.length) {
@@ -1009,7 +1133,7 @@ async function fetchData() {
 
   // helper to rebuild the API URL with a page override
   const buildURL = (pageOverride) => {
-    const params = new URLSearchParams(qs()); // reuse your qs()
+    const params = new URLSearchParams(qs());
     if (pageOverride != null) params.set('page', String(pageOverride));
     return `/api/opportunities?${params.toString()}`;
   };
@@ -1027,7 +1151,7 @@ async function fetchData() {
   els.prev.disabled           = page <= 1;
   els.next.disabled           = page >= pages;
 
-  // ---------- filters panels (unchanged) ----------
+  // ---------- filters panels ----------
   const spNow = JSON.stringify(sports || []);
   const spPrev = JSON.stringify(state._sports || []);
   if (spNow !== spPrev) {
@@ -1167,7 +1291,6 @@ async function fetchData() {
     const headerR = it.book_table?.headers?.[2] || bets.bottom || 'Right';
     const optionsPacked = btoa(unescape(encodeURIComponent(JSON.stringify({ A: optsAAll, B: optsBAll }))));
 
-    
     // keep extra info on the row for popovers + better title building
     tr._pairToUse = best;
     tr._leftOptions = optsAAll;
@@ -1277,7 +1400,6 @@ async function fetchData() {
       const b = buildBundle(it, null);
       if (b) bundles.push(b);
     }
-    // optional: client-side resort when sorting by ROI using recomputed roi
     if (state.sortBy === 'roi') {
       bundles.sort((a,b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
     }
@@ -1290,12 +1412,10 @@ async function fetchData() {
 
   // WITH bookie filter: fetch ALL pages, then client-filter + client-paginate
   const allBundles = [];
-  // include the first page we already have
   for (const it of items) {
     const b = buildBundle(it, allowed);
     if (b) allBundles.push(b);
   }
-  // pull remaining pages
   for (let p = 1; p <= pages; p++) {
     if (p === page) continue;
     const r = await fetch(buildURL(p));
@@ -1306,27 +1426,22 @@ async function fetchData() {
     }
   }
 
-  // Sort if sorting by ROI (recomputed)
   if (state.sortBy === 'roi') {
     allBundles.sort((a,b) => state.sortDir === 'asc' ? (a.roi - b.roi) : (b.roi - a.roi));
   }
 
-  // Client totals + pagination
   const clientTotal = allBundles.length;
   const pageSize    = state.pageSize;
   const clientPages = Math.max(1, Math.ceil(clientTotal / pageSize));
 
-  // Clamp state.page if out of range after filtering
   if (state.page > clientPages) state.page = clientPages;
 
-  // Update UI counters to filtered values
   els.totalCount.textContent = clientTotal;
   els.pages.textContent      = clientPages;
   els.page.textContent       = state.page;
   els.prev.disabled          = state.page <= 1;
   els.next.disabled          = state.page >= clientPages;
 
-  // Slice current page
   const start = (state.page - 1) * pageSize;
   const end   = start + pageSize;
   const slice = allBundles.slice(start, end);
