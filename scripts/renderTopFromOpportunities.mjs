@@ -76,24 +76,20 @@ function normalizeBookieKey(name = "") {
   return s.replace(/[^a-z0-9]/g, "");
 }
 
-const AEST_OFFSET_MS = 10 * 60 * 60 * 1000; // UTC+10
-
 function formatAEST(d) {
+  // returns "31 Dec 2025, 9:14 am" in AEST (Brisbane/Sydney time)
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "";
 
-  // shift UTC instant -> AEST clock time
-  const aest = new Date(dt.getTime() + AEST_OFFSET_MS);
-
   const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "UTC", // important: we already shifted, so format as UTC
+    timeZone: "Australia/Brisbane", // AEST (no DST)
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-  }).formatToParts(aest);
+  }).formatToParts(dt);
 
   const get = (t) => parts.find(p => p.type === t)?.value ?? "";
   const day = get("day");
@@ -101,90 +97,48 @@ function formatAEST(d) {
   const year = get("year");
   const hour = get("hour");
   const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
+  const dayPeriod = (get("dayPeriod") || "").toLowerCase(); // am/pm
 
   return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
 }
 
-function formatAESTNoYear(d) {
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "";
+function parseOpportunitiesEventDate(raw, fallbackYear) {
+  // Handles:
+  // 1) ISO strings -> Date
+  // 2) "Tue 30 Dec 20:00" (assumed AEST already)
+  // Returns a Date or null
 
-  const aest = new Date(dt.getTime() + AEST_OFFSET_MS);
-
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "UTC",
-    day: "2-digit",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).formatToParts(aest);
-
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
-  const day = get("day");
-  const month = get("month");
-  const hour = get("hour");
-  const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
-
-  return `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
-}
-
-function getAestNowParts() {
-  // "now" in AEST clock time (read via UTC getters after shifting)
-  const aest = new Date(Date.now() + AEST_OFFSET_MS);
-
-  return {
-    year: aest.getUTCFullYear(),
-    month: aest.getUTCMonth(), // 0-11
-    day: aest.getUTCDate(),
-    hour: aest.getUTCHours(),
-    minute: aest.getUTCMinutes(),
-  };
-}
-
-function dateFromAestLocal(year, monthIndex, day, hour, minute) {
-  // Construct a Date representing that AEST local time.
-  // Brisbane is UTC+10 always, so UTC = local - 10 hours.
-  return new Date(Date.UTC(year, monthIndex, day, hour - 10, minute, 0));
-}
-
-function parseOpportunitiesEventDate(raw) {
   if (!raw) return null;
-  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
-
   const s = String(raw).trim();
 
-  // Parse NO-YEAR format FIRST: "Tue 30 Dec 20:00"
+  // If ISO or parseable by Date(), use it
+  const isoTry = new Date(s);
+  if (!Number.isNaN(isoTry.getTime())) return isoTry;
+
+  // Parse "Tue 30 Dec 20:00"
+  // We'll assume it's AEST local time and inject year.
+  // Format: DDD DD MMM HH:MM
   const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
-  if (m) {
-    const day = Number(m[2]);
-    const monStr = m[3].toLowerCase();
-    const hh = Number(m[4]);
-    const mm = Number(m[5]);
+  if (!m) return null;
 
-    const monthMap = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
-    const monthIndex = monthMap[monStr];
-    if (monthIndex === undefined) return null;
+  const day = Number(m[2]);
+  const monStr = m[3].toLowerCase();
+  const hh = Number(m[4]);
+  const mm = Number(m[5]);
 
-    const nowParts = getAestNowParts(); // Brisbane month/year
-    const year = (monthIndex < nowParts.month) ? (nowParts.year + 1) : nowParts.year;
+  const monthMap = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+  const month = monthMap[monStr];
+  if (month === undefined) return null;
 
-    return dateFromAestLocal(year, monthIndex, day, hh, mm);
-  }
+  const year = fallbackYear ?? new Date().getFullYear();
 
-  // Only accept real ISO / explicit-year strings here
-  const looksIso =
-    /^\d{4}-\d{2}-\d{2}/.test(s) || s.includes("T") || /Z$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s);
-  const hasYear = /\b(19|20)\d{2}\b/.test(s);
-
-  if (looksIso || hasYear) {
-    const dt = new Date(s);
-    return Number.isNaN(dt.getTime()) ? null : dt;
-  }
-
-  return null;
+  // Construct as UTC but representing Brisbane local time:
+  // Brisbane is UTC+10 (no DST), so UTC time = local -10h
+  const utc = Date.UTC(year, month, day, hh - 10, mm, 0);
+  return new Date(utc);
 }
 
 function parseHeaderCell(cell = "") {
@@ -310,7 +264,7 @@ async function main() {
   const activePath = arg("active"); // e.g. data/server/data/active_comp_ids.json
   const outDir = arg("outDir", "data/server/data/social/posts");
   const postedKeysPath = arg("postedKeys", "data/server/data/social/posted_keys.json");
-  const topN = Number(arg("top", "1")) || 1;
+  const topN = Number(arg("top", "3")) || 3;
 
   if (!oppsPath || !activePath) {
     console.error("Usage: node renderFromOpportunities.mjs --opps <opportunities.json> --active <active_comp_ids.json>");
@@ -319,9 +273,10 @@ async function main() {
 
   const opps = safeReadJson(oppsPath);
   const items = Array.isArray(opps?.items) ? opps.items : [];
-
-  const lastUpdatedIso = opps?.lastUpdated || opps?.last_updated || "";
+  const lastUpdated = opps?.lastUpdated || "";
   const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
+
+  const yearAnchor = lastUpdatedIso ? new Date(lastUpdatedIso).getUTCFullYear() : new Date().getFullYear();
 
   const leagueMap = loadLeagueMap(activePath);
 
@@ -358,8 +313,8 @@ async function main() {
     const roiPct = toPct(item?.roi);
     if (roiPct === null) continue;
 
-    const eventDateObj = parseOpportunitiesEventDate(item?.date);
-    const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
+    const eventDateObj = parseOpportunitiesEventDate(item?.date, yearAnchor);
+    const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
 
     const payload = {
       brand: {

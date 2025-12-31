@@ -156,96 +156,39 @@ function resolveLeagueMap(json) {
   return out;
 }
 
-function formatAEST(dateLike, { withYear = true } = {}) {
-  const d = new Date(dateLike);
-  if (Number.isNaN(d.getTime())) return "";
-
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    day: "2-digit",
-    month: "short",
-    ...(withYear ? { year: "numeric" } : {}),
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).formatToParts(d);
-
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
-  const day = get("day");
-  const month = get("month");
-  const year = get("year");
-  const hour = get("hour");
-  const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
-
-  return withYear
-    ? `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`
-    : `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
-}
-
 function cleanAgency(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
   out = out.split('-')[0];
   return out.trim();
 }
-
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
-
-function getAestNowParts() {
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
-  return { year: Number(get("year")), month: Number(get("month")) - 1 };
-}
-
-function inferYearAest(monthIndex) {
-  const now = getAestNowParts();
-  return (monthIndex < now.month) ? (now.year + 1) : now.year;
-}
-
 function coerceISO(dstr) {
   if (typeof dstr !== 'string') return null;
   const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
-
   const day = parseInt(m[1], 10);
   const mon = MONTHS[m[2].toLowerCase()];
   if (mon == null) return null;
-
-  const year = inferYearAest(mon);
-
-  const yyyy = String(year);
-  const mm = String(mon + 1).padStart(2, '0');
-  const dd = String(day).padStart(2, '0');
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), mon, day, 0, 0, 0));
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
-
 function coerceKickoffISO(dstr) {
   if (typeof dstr !== 'string') return null;
   const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
-
   const day = parseInt(m[1], 10);
   const mon = MONTHS[m[2].toLowerCase()];
   const hh = parseInt(m[3], 10);
   const mi = parseInt(m[4], 10);
   if (mon == null) return null;
-
-  const year = inferYearAest(mon);
-
-  // IMPORTANT: store as AEST (+10:00), NOT Z
-  const yyyy = String(year);
-  const mm = String(mon + 1).padStart(2, '0');
-  const dd = String(day).padStart(2, '0');
-  const HH = String(hh).padStart(2, '0');
-  const MI = String(mi).padStart(2, '0');
-
-  return `${yyyy}-${mm}-${dd}T${HH}:${MI}:00+10:00`;
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), mon, day, hh, mi, 0));
+  return d.toISOString();
 }
 
 // --- loaders (URL-or-local, with cache & fallback) ---
@@ -425,13 +368,6 @@ app.get('/api/opportunities', async (req, res) => {
     if (!it.kickoff && it.date) {
       const k = coerceKickoffISO(it.date);
       if (k) it.kickoff = k;
-    }
-
-    // ✅ ADD THIS: use AEST formatted display string for UI
-    if (it.kickoff) {
-      it.kickoffText = formatAEST(it.kickoff, { withYear: false }); // "31 Dec, 9:14 am"
-    } else {
-      it.kickoffText = it.date || "";
     }
   }
 
