@@ -102,12 +102,39 @@ function formatAEST(d) {
   return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
 }
 
-function parseOpportunitiesEventDate(raw, fallbackYear) {
+function getAestNowParts() {
+  // returns {year, monthIndex(0-11), day, hour, minute}
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")) - 1,
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+  };
+}
+
+function dateFromAestLocal(year, monthIndex, day, hour, minute) {
+  // Construct a Date representing that AEST local time.
+  // Brisbane is UTC+10 always, so UTC = local - 10 hours.
+  return new Date(Date.UTC(year, monthIndex, day, hour - 10, minute, 0));
+}
+
+function parseOpportunitiesEventDate(raw) {
   // Handles:
   // 1) ISO strings -> Date
-  // 2) "Tue 30 Dec 20:00" (assumed AEST already)
-  // Returns a Date or null
-
+  // 2) "Tue 30 Dec 20:00" (no year) -> infer year around New Year
   if (!raw) return null;
   const s = String(raw).trim();
 
@@ -116,8 +143,6 @@ function parseOpportunitiesEventDate(raw, fallbackYear) {
   if (!Number.isNaN(isoTry.getTime())) return isoTry;
 
   // Parse "Tue 30 Dec 20:00"
-  // We'll assume it's AEST local time and inject year.
-  // Format: DDD DD MMM HH:MM
   const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
   if (!m) return null;
 
@@ -133,12 +158,22 @@ function parseOpportunitiesEventDate(raw, fallbackYear) {
   const month = monthMap[monStr];
   if (month === undefined) return null;
 
-  const year = fallbackYear ?? new Date().getFullYear();
+  // Infer year based on AEST "now"
+  const nowParts = getAestNowParts();
+  const nowAest = dateFromAestLocal(nowParts.year, nowParts.month, nowParts.day, nowParts.hour, nowParts.minute);
 
-  // Construct as UTC but representing Brisbane local time:
-  // Brisbane is UTC+10 (no DST), so UTC time = local -10h
-  const utc = Date.UTC(year, month, day, hh - 10, mm, 0);
-  return new Date(utc);
+  // Candidate in current year
+  const candThisYear = dateFromAestLocal(nowParts.year, month, day, hh, mm);
+  // Candidate in next year
+  const candNextYear = dateFromAestLocal(nowParts.year + 1, month, day, hh, mm);
+
+  // Choose the first candidate that is not "too far" in the past.
+  // Rule: prefer this year unless it is earlier than now by more than 7 days.
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  if (candThisYear.getTime() >= nowAest.getTime() - 7 * MS_DAY) {
+    return candThisYear;
+  }
+  return candNextYear;
 }
 
 function parseHeaderCell(cell = "") {
@@ -273,10 +308,9 @@ async function main() {
 
   const opps = safeReadJson(oppsPath);
   const items = Array.isArray(opps?.items) ? opps.items : [];
-  const lastUpdated = opps?.lastUpdated || "";
-  const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
 
-  const yearAnchor = lastUpdatedIso ? new Date(lastUpdatedIso).getUTCFullYear() : new Date().getFullYear();
+  const lastUpdatedIso = opps?.lastUpdated || opps?.last_updated || "";
+  const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
 
   const leagueMap = loadLeagueMap(activePath);
 
@@ -313,7 +347,7 @@ async function main() {
     const roiPct = toPct(item?.roi);
     if (roiPct === null) continue;
 
-    const eventDateObj = parseOpportunitiesEventDate(item?.date, yearAnchor);
+    const eventDateObj = parseOpportunitiesEventDate(item?.date);
     const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
 
     const payload = {
