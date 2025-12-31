@@ -157,40 +157,47 @@ function dateFromAestLocal(year, monthIndex, day, hour, minute) {
 
 function parseOpportunitiesEventDate(raw) {
   // Handles:
-  // 1) "Tue 30 Dec 20:00" (no year) -> infer year:
-  //    if month < currentMonth(AEST) => year = currentYear + 1 else currentYear
-  // 2) ISO strings -> Date
-
+  // 1) ISO strings -> Date
+  // 2) "Tue 30 Dec 20:00" (no year) -> infer year around New Year
   if (!raw) return null;
   const s = String(raw).trim();
 
-  // ✅ FIRST: parse "Tue 30 Dec 20:00" so we never fall into the 2001 Date() weirdness
-  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
-  if (m) {
-    const day = Number(m[2]);
-    const monStr = m[3].toLowerCase();
-    const hh = Number(m[4]);
-    const mm = Number(m[5]);
-
-    const monthMap = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
-    const monthIndex = monthMap[monStr];
-    if (monthIndex === undefined) return null;
-
-    // ✅ Your rule: if month < current month (AEST), it's next year
-    const nowParts = getAestNowParts(); // AEST current date parts
-    const year = (monthIndex < nowParts.month) ? (nowParts.year + 1) : nowParts.year;
-
-    return dateFromAestLocal(year, monthIndex, day, hh, mm);
-  }
-
-  // ✅ Otherwise, fall back to normal Date parsing (ISO etc.)
+  // If ISO or parseable by Date(), use it
   const isoTry = new Date(s);
   if (!Number.isNaN(isoTry.getTime())) return isoTry;
 
-  return null;
+  // Parse "Tue 30 Dec 20:00"
+  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+
+  const day = Number(m[2]);
+  const monStr = m[3].toLowerCase();
+  const hh = Number(m[4]);
+  const mm = Number(m[5]);
+
+  const monthMap = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+  const month = monthMap[monStr];
+  if (month === undefined) return null;
+
+  // Infer year based on AEST "now"
+  const nowParts = getAestNowParts();
+  const nowAest = dateFromAestLocal(nowParts.year, nowParts.month, nowParts.day, nowParts.hour, nowParts.minute);
+
+  // Candidate in current year
+  const candThisYear = dateFromAestLocal(nowParts.year, month, day, hh, mm);
+  // Candidate in next year
+  const candNextYear = dateFromAestLocal(nowParts.year + 1, month, day, hh, mm);
+
+  // Choose the first candidate that is not "too far" in the past.
+  // Rule: prefer this year unless it is earlier than now by more than 7 days.
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  if (candThisYear.getTime() >= nowAest.getTime() - 7 * MS_DAY) {
+    return candThisYear;
+  }
+  return candNextYear;
 }
 
 function parseHeaderCell(cell = "") {
@@ -327,7 +334,7 @@ async function main() {
   const items = Array.isArray(opps?.items) ? opps.items : [];
 
   const lastUpdatedIso = opps?.lastUpdated || opps?.last_updated || "";
-  const lastUpdatedText = lastUpdatedIso ? formatAEST(lastUpdatedIso) : "";
+  const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
 
   const leagueMap = loadLeagueMap(activePath);
 
@@ -365,7 +372,7 @@ async function main() {
     if (roiPct === null) continue;
 
     const eventDateObj = parseOpportunitiesEventDate(item?.date);
-    const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
+    const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
 
     const payload = {
       brand: {
