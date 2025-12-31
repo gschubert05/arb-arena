@@ -76,6 +76,56 @@ function normalizeBookieKey(name = "") {
   return s.replace(/[^a-z0-9]/g, "");
 }
 
+function fmtOdds2(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return "";
+  return n.toFixed(2);
+}
+
+function buildCaption({ arb, meta, brand }) {
+  const roi = (arb?.roi != null) ? `${Number(arb.roi).toFixed(2).replace(/\.00$/, "")}%` : "";
+  const sport = arb?.sport ?? "";
+  const league = arb?.league ?? "";
+  const event = arb?.event ?? "";
+  const market = arb?.market ?? "";
+  const line = arb?.line ? ` | Line ${arb.line}` : "";
+  const date = arb?.date ? `🗓️ ${arb.date}` : "";
+
+  const legs = Array.isArray(arb?.legs) ? arb.legs.slice(0, 2) : [];
+  const legLines = legs.map((l, i) => {
+    const side = l?.side ?? "";
+    const lline = l?.line ? ` ${l.line}` : "";
+    const odds = fmtOdds2(l?.odds);
+    const bookie = l?.bookie ?? "";
+    // Example: "1) Over +3.50 @ 1.95 (Sportsbet)"
+    return `${i + 1}) ${side}${lline} @ ${odds}${bookie ? ` (${bookie})` : ""}`.trim();
+  });
+
+  const updated = meta?.lastUpdatedText ? `Last updated: ${meta.lastUpdatedText}` : "";
+  const url = brand?.url ?? "arb-arena.com";
+
+  // Keep it clean + copy-paste friendly
+  const lines = [
+    `🚨 ARB ALERT — ROI ${roi}`,
+    `${sport}${league ? ` • ${league}` : ""}`,
+    event,
+    market ? `Market: ${market}${line}` : "",
+    date,
+    "",
+    ...legLines,
+    "",
+    updated,
+    "",
+    `🔗 ${url}`,
+    "",
+    `#arbitrage #sportsbetting #matchedbetting #valuebetting #sports`,
+  ].filter(Boolean);
+
+  // Optional: keep under typical IG limits
+  const caption = lines.join("\n");
+  return caption.length > 2100 ? caption.slice(0, 2100) + "…" : caption;
+}
+
 function formatAEST(d) {
   // returns "31 Dec 2025, 9:14 am" in AEST (Brisbane/Sydney time)
   const dt = new Date(d);
@@ -405,6 +455,10 @@ async function main() {
       [RENDER_POST, "--in", tmpJson, "--out", outPath, "--format", "square", "--scale", "2"],
       { stdio: "inherit" }
     );
+
+    const caption = buildCaption(payload);
+    const captionPath = outPath.replace(/\.png$/i, ".caption.txt");
+    fs.writeFileSync(captionPath, caption, "utf8");
 
     fs.unlinkSync(tmpJson);
 
