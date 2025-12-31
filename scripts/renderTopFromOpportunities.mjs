@@ -319,8 +319,8 @@ function isoOrString(x) {
 }
 
 async function main() {
-  const oppsPath = arg("opps");     // e.g. data/server/data/opportunities.json
-  const activePath = arg("active"); // e.g. data/server/data/active_comp_ids.json
+  const oppsPath = arg("opps");
+  const activePath = arg("active");
   const outDir = arg("outDir", "data/server/data/social/posts");
   const postedKeysPath = arg("postedKeys", "data/server/data/social/posted_keys.json");
   const topN = Number(arg("top", "3")) || 3;
@@ -334,11 +334,10 @@ async function main() {
   const items = Array.isArray(opps?.items) ? opps.items : [];
 
   const lastUpdatedIso = opps?.lastUpdated || opps?.last_updated || "";
-  const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
+  const lastUpdatedText = lastUpdatedIso ? formatAESTNoYear(lastUpdatedIso) : "";
 
   const leagueMap = loadLeagueMap(activePath);
 
-  // Sort by ROI desc
   const sorted = items
     .slice()
     .sort((a, b) => (Number(b?.roi) || 0) - (Number(a?.roi) || 0));
@@ -359,8 +358,6 @@ async function main() {
     const legs = buildLegsFromBookTable(item);
     if (!legs) continue;
 
-    // Determine "line" displayed in your header:
-    // Prefer numeric part from header if present (e.g. "Over 3.50" → 3.50)
     const headers = item?.book_table?.headers ?? [];
     const left = parseHeaderCell(headers[1] ?? "");
     const lineDisplay = left?.line ? String(left.line).trim() : "";
@@ -372,7 +369,7 @@ async function main() {
     if (roiPct === null) continue;
 
     const eventDateObj = parseOpportunitiesEventDate(item?.date);
-    const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
+    const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
 
     const payload = {
       brand: {
@@ -382,12 +379,12 @@ async function main() {
       },
       meta: {
         generatedAt: new Date().toISOString(),
-        lastUpdatedText, // ✅ formatted AEST
+        lastUpdatedText,
       },
       arb: {
         roi: roiPct,
         sport: item?.sport ?? "",
-        date: eventDateText, // ✅ formatted AEST
+        date: eventDateText,
         league: league,
         event: item?.game ?? "",
         market: item?.market ?? "",
@@ -403,21 +400,12 @@ async function main() {
 
     fs.writeFileSync(tmpJson, JSON.stringify(payload, null, 2), "utf8");
 
-    // Run your existing renderer
     execFileSync(
       "node",
-      [
-        RENDER_POST,
-        "--in", tmpJson,
-        "--out", outPath,
-        "--format", "square",
-        "--scale", "2",
-      ],
+      [RENDER_POST, "--in", tmpJson, "--out", outPath, "--format", "square", "--scale", "2"],
       { stdio: "inherit" }
     );
 
-
-    // Clean temp payload json if you want
     fs.unlinkSync(tmpJson);
 
     posted.add(key);
@@ -425,7 +413,6 @@ async function main() {
   }
 
   writePostedKeys(postedKeysPath, posted);
-
   console.log(`Rendered ${rendered} post(s).`);
 }
 
