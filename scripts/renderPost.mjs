@@ -655,7 +655,7 @@ function buildHtml(payload, W, H, format) {
       color: rgba(226,232,240,0.94);
     }
     .ctaLine2{
-      font-size: 36px;
+      font-size: 40px;
       font-weight: 650;
       color: rgba(226,232,240,0.94);
     }
