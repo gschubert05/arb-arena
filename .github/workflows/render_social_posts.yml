@@ -38,7 +38,7 @@ jobs:
         working-directory: main/scripts
         run: npx playwright install --with-deps chromium
 
-      - name: Render top 3 posts
+      - name: Render top post
         working-directory: main
         run: |
           node scripts/renderTopFromOpportunities.mjs \
@@ -46,7 +46,7 @@ jobs:
             --active ../data/server/data/active_comp_ids.json \
             --outDir ../data/server/data/social/posts \
             --postedKeys ../data/server/data/social/posted_keys.json \
-            --top 3
+            --top 1
 
       - name: Commit outputs back to data branch
         working-directory: data
