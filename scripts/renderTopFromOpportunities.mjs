@@ -328,7 +328,7 @@ async function main() {
   const activePath = arg("active"); // e.g. data/server/data/active_comp_ids.json
   const outDir = arg("outDir", "data/server/data/social/posts");
   const postedKeysPath = arg("postedKeys", "data/server/data/social/posted_keys.json");
-  const topN = Number(arg("top", "3")) || 3;
+  const topN = Number(arg("top", "1")) || 1;
 
   if (!oppsPath || !activePath) {
     console.error("Usage: node renderFromOpportunities.mjs --opps <opportunities.json> --active <active_comp_ids.json>");
