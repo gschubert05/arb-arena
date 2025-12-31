@@ -156,39 +156,66 @@ function resolveLeagueMap(json) {
   return out;
 }
 
+function getAestNowYearMonth() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane", // AEST (no DST)
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  return { year: Number(get("year")), monthIndex: Number(get("month")) - 1 }; // 0-11
+}
+
+function inferYearForMonth(monIndex) {
+  const { year, monthIndex: nowMon } = getAestNowYearMonth();
+  // Your rule: if month of event is lower than current month => next year
+  return monIndex < nowMon ? year + 1 : year;
+}
+
 function cleanAgency(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
   out = out.split('-')[0];
   return out.trim();
 }
+
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+
 function coerceISO(dstr) {
   if (typeof dstr !== 'string') return null;
   const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
+
   const day = parseInt(m[1], 10);
   const mon = MONTHS[m[2].toLowerCase()];
   if (mon == null) return null;
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), mon, day, 0, 0, 0));
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(d.getUTCDate()).padStart(2, '0');
+
+  const year = inferYearForMonth(mon);
+
+  const yyyy = String(year);
+  const mm = String(mon + 1).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
+
 function coerceKickoffISO(dstr) {
   if (typeof dstr !== 'string') return null;
   const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
   if (!m) return null;
+
   const day = parseInt(m[1], 10);
   const mon = MONTHS[m[2].toLowerCase()];
   const hh = parseInt(m[3], 10);
   const mi = parseInt(m[4], 10);
   if (mon == null) return null;
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), mon, day, hh, mi, 0));
-  return d.toISOString();
+
+  const year = inferYearForMonth(mon);
+
+  // Convert AEST (UTC+10) local time -> UTC ISO
+  const utc = new Date(Date.UTC(year, mon, day, hh - 10, mi, 0));
+  return utc.toISOString();
 }
 
 // --- loaders (URL-or-local, with cache & fallback) ---
