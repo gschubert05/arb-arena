@@ -156,24 +156,6 @@ function resolveLeagueMap(json) {
   return out;
 }
 
-function getAestNowYearMonth() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane", // AEST (no DST)
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(now);
-
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
-  return { year: Number(get("year")), monthIndex: Number(get("month")) - 1 }; // 0-11
-}
-
-function inferYearForMonth(monIndex) {
-  const { year, monthIndex: nowMon } = getAestNowYearMonth();
-  // Your rule: if month of event is lower than current month => next year
-  return monIndex < nowMon ? year + 1 : year;
-}
-
 function formatAEST(dateLike, { withYear = true } = {}) {
   const d = new Date(dateLike);
   if (Number.isNaN(d.getTime())) return "";
@@ -210,6 +192,22 @@ function cleanAgency(name) {
 
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
 
+function getAestNowParts() {
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  return { year: Number(get("year")), month: Number(get("month")) - 1 };
+}
+
+function inferYearAest(monthIndex) {
+  const now = getAestNowParts();
+  return (monthIndex < now.month) ? (now.year + 1) : now.year;
+}
+
 function coerceISO(dstr) {
   if (typeof dstr !== 'string') return null;
   const m = dstr.match(/^\w{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})/);
@@ -219,7 +217,7 @@ function coerceISO(dstr) {
   const mon = MONTHS[m[2].toLowerCase()];
   if (mon == null) return null;
 
-  const year = inferYearForMonth(mon);
+  const year = inferYearAest(mon);
 
   const yyyy = String(year);
   const mm = String(mon + 1).padStart(2, '0');
@@ -238,11 +236,16 @@ function coerceKickoffISO(dstr) {
   const mi = parseInt(m[4], 10);
   if (mon == null) return null;
 
-  const year = inferYearForMonth(mon);
+  const year = inferYearAest(mon);
 
-  // Treat input as AEST local -> convert to UTC ISO for stable sorting
-  const utc = new Date(Date.UTC(year, mon, day, hh - 10, mi, 0));
-  return utc.toISOString(); // UTC string (good), but don't display it raw
+  // IMPORTANT: store as AEST (+10:00), NOT Z
+  const yyyy = String(year);
+  const mm = String(mon + 1).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  const HH = String(hh).padStart(2, '0');
+  const MI = String(mi).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}T${HH}:${MI}:00+10:00`;
 }
 
 // --- loaders (URL-or-local, with cache & fallback) ---

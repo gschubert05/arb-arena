@@ -151,43 +151,30 @@ function dateFromAestLocal(year, monthIndex, day, hour, minute) {
 }
 
 function parseOpportunitiesEventDate(raw) {
-  // Handles:
-  // 1) ISO strings / explicit-year strings -> Date
-  // 2) "Tue 30 Dec 20:00" (no year) -> infer year:
-  //    if month < currentMonth(AEST) => year = currentYear + 1 else currentYear
-
   if (!raw) return null;
-
-  // allow passing a Date in
   if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
 
   const s = String(raw).trim();
 
-  // ---- Case 2: NO-YEAR format FIRST (avoid bogus Date() parse -> 2001) ----
-  const m = s.match(
-    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/
-  );
+  // Parse NO-YEAR format FIRST: "Tue 30 Dec 20:00"
+  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
   if (m) {
     const day = Number(m[2]);
     const monStr = m[3].toLowerCase();
     const hh = Number(m[4]);
     const mm = Number(m[5]);
 
-    const monthMap = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-    };
+    const monthMap = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
     const monthIndex = monthMap[monStr];
     if (monthIndex === undefined) return null;
 
-    const nowParts = getAestNowParts(); // {year, month (0-11), ...} in AEST
+    const nowParts = getAestNowParts(); // Brisbane month/year
     const year = (monthIndex < nowParts.month) ? (nowParts.year + 1) : nowParts.year;
 
     return dateFromAestLocal(year, monthIndex, day, hh, mm);
   }
 
-  // ---- Case 1: ISO / explicit year formats only ----
-  // ISO-like (2025-12-30T...Z / with offset) OR contains a 4-digit year somewhere
+  // Only accept real ISO / explicit-year strings here
   const looksIso =
     /^\d{4}-\d{2}-\d{2}/.test(s) || s.includes("T") || /Z$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s);
   const hasYear = /\b(19|20)\d{2}\b/.test(s);
