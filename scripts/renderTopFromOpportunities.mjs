@@ -102,6 +102,30 @@ function formatAEST(d) {
   return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
 }
 
+function formatAESTNoYear(d) {
+  // returns "31 Dec, 9:14 am" in AEST (Brisbane time)
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(dt);
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  const day = get("day");
+  const month = get("month");
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
+
+  return `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
+}
+
 function getAestNowParts() {
   // returns {year, monthIndex(0-11), day, hour, minute}
   const now = new Date();
@@ -133,47 +157,40 @@ function dateFromAestLocal(year, monthIndex, day, hour, minute) {
 
 function parseOpportunitiesEventDate(raw) {
   // Handles:
-  // 1) ISO strings -> Date
-  // 2) "Tue 30 Dec 20:00" (no year) -> infer year around New Year
+  // 1) "Tue 30 Dec 20:00" (no year) -> infer year:
+  //    if month < currentMonth(AEST) => year = currentYear + 1 else currentYear
+  // 2) ISO strings -> Date
+
   if (!raw) return null;
   const s = String(raw).trim();
 
-  // If ISO or parseable by Date(), use it
+  // ✅ FIRST: parse "Tue 30 Dec 20:00" so we never fall into the 2001 Date() weirdness
+  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const day = Number(m[2]);
+    const monStr = m[3].toLowerCase();
+    const hh = Number(m[4]);
+    const mm = Number(m[5]);
+
+    const monthMap = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    };
+    const monthIndex = monthMap[monStr];
+    if (monthIndex === undefined) return null;
+
+    // ✅ Your rule: if month < current month (AEST), it's next year
+    const nowParts = getAestNowParts(); // AEST current date parts
+    const year = (monthIndex < nowParts.month) ? (nowParts.year + 1) : nowParts.year;
+
+    return dateFromAestLocal(year, monthIndex, day, hh, mm);
+  }
+
+  // ✅ Otherwise, fall back to normal Date parsing (ISO etc.)
   const isoTry = new Date(s);
   if (!Number.isNaN(isoTry.getTime())) return isoTry;
 
-  // Parse "Tue 30 Dec 20:00"
-  const m = s.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-
-  const day = Number(m[2]);
-  const monStr = m[3].toLowerCase();
-  const hh = Number(m[4]);
-  const mm = Number(m[5]);
-
-  const monthMap = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-  };
-  const month = monthMap[monStr];
-  if (month === undefined) return null;
-
-  // Infer year based on AEST "now"
-  const nowParts = getAestNowParts();
-  const nowAest = dateFromAestLocal(nowParts.year, nowParts.month, nowParts.day, nowParts.hour, nowParts.minute);
-
-  // Candidate in current year
-  const candThisYear = dateFromAestLocal(nowParts.year, month, day, hh, mm);
-  // Candidate in next year
-  const candNextYear = dateFromAestLocal(nowParts.year + 1, month, day, hh, mm);
-
-  // Choose the first candidate that is not "too far" in the past.
-  // Rule: prefer this year unless it is earlier than now by more than 7 days.
-  const MS_DAY = 24 * 60 * 60 * 1000;
-  if (candThisYear.getTime() >= nowAest.getTime() - 7 * MS_DAY) {
-    return candThisYear;
-  }
-  return candNextYear;
+  return null;
 }
 
 function parseHeaderCell(cell = "") {
@@ -348,7 +365,7 @@ async function main() {
     if (roiPct === null) continue;
 
     const eventDateObj = parseOpportunitiesEventDate(item?.date);
-    const eventDateText = eventDateObj ? formatAEST(eventDateObj) : (item?.date ?? "");
+    const eventDateText = eventDateObj ? formatAESTNoYear(eventDateObj) : (item?.date ?? "");
 
     const payload = {
       brand: {
