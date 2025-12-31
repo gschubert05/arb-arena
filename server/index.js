@@ -201,22 +201,6 @@ function formatAEST(dateLike, { withYear = true } = {}) {
     : `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
 }
 
-function getAestNowYearMonth() {
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
-  return { year: Number(get("year")), monthIndex: Number(get("month")) - 1 };
-}
-
-function inferYearForMonth(monIndex) {
-  const { year, monthIndex: nowMon } = getAestNowYearMonth();
-  return monIndex < nowMon ? year + 1 : year; // your rule
-}
-
 function cleanAgency(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
