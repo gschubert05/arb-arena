@@ -76,20 +76,24 @@ function normalizeBookieKey(name = "") {
   return s.replace(/[^a-z0-9]/g, "");
 }
 
+const AEST_OFFSET_MS = 10 * 60 * 60 * 1000; // UTC+10
+
 function formatAEST(d) {
-  // returns "31 Dec 2025, 9:14 am" in AEST (Brisbane/Sydney time)
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "";
 
+  // shift UTC instant -> AEST clock time
+  const aest = new Date(dt.getTime() + AEST_OFFSET_MS);
+
   const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane", // AEST (no DST)
+    timeZone: "UTC", // important: we already shifted, so format as UTC
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-  }).formatToParts(dt);
+  }).formatToParts(aest);
 
   const get = (t) => parts.find(p => p.type === t)?.value ?? "";
   const day = get("day");
@@ -97,24 +101,25 @@ function formatAEST(d) {
   const year = get("year");
   const hour = get("hour");
   const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toLowerCase(); // am/pm
+  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
 
   return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
 }
 
 function formatAESTNoYear(d) {
-  // "31 Dec, 9:14 am" in AEST
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "";
 
+  const aest = new Date(dt.getTime() + AEST_OFFSET_MS);
+
   const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
+    timeZone: "UTC",
     day: "2-digit",
     month: "short",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-  }).formatToParts(dt);
+  }).formatToParts(aest);
 
   const get = (t) => parts.find(p => p.type === t)?.value ?? "";
   const day = get("day");
@@ -127,25 +132,15 @@ function formatAESTNoYear(d) {
 }
 
 function getAestNowParts() {
-  // returns {year, monthIndex(0-11), day, hour, minute}
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Brisbane",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
+  // "now" in AEST clock time (read via UTC getters after shifting)
+  const aest = new Date(Date.now() + AEST_OFFSET_MS);
 
-  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
   return {
-    year: Number(get("year")),
-    month: Number(get("month")) - 1,
-    day: Number(get("day")),
-    hour: Number(get("hour")),
-    minute: Number(get("minute")),
+    year: aest.getUTCFullYear(),
+    month: aest.getUTCMonth(), // 0-11
+    day: aest.getUTCDate(),
+    hour: aest.getUTCHours(),
+    minute: aest.getUTCMinutes(),
   };
 }
 

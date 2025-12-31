@@ -174,6 +174,49 @@ function inferYearForMonth(monIndex) {
   return monIndex < nowMon ? year + 1 : year;
 }
 
+function formatAEST(dateLike, { withYear = true } = {}) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    day: "2-digit",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(d);
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  const day = get("day");
+  const month = get("month");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = (get("dayPeriod") || "").toLowerCase();
+
+  return withYear
+    ? `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`
+    : `${day} ${month}, ${hour}:${minute} ${dayPeriod}`;
+}
+
+function getAestNowYearMonth() {
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+
+  const get = (t) => parts.find(p => p.type === t)?.value ?? "";
+  return { year: Number(get("year")), monthIndex: Number(get("month")) - 1 };
+}
+
+function inferYearForMonth(monIndex) {
+  const { year, monthIndex: nowMon } = getAestNowYearMonth();
+  return monIndex < nowMon ? year + 1 : year; // your rule
+}
+
 function cleanAgency(name) {
   if (!name) return '';
   let out = String(name).split('(')[0];
@@ -213,9 +256,9 @@ function coerceKickoffISO(dstr) {
 
   const year = inferYearForMonth(mon);
 
-  // Convert AEST (UTC+10) local time -> UTC ISO
+  // Treat input as AEST local -> convert to UTC ISO for stable sorting
   const utc = new Date(Date.UTC(year, mon, day, hh - 10, mi, 0));
-  return utc.toISOString();
+  return utc.toISOString(); // UTC string (good), but don't display it raw
 }
 
 // --- loaders (URL-or-local, with cache & fallback) ---
@@ -395,6 +438,13 @@ app.get('/api/opportunities', async (req, res) => {
     if (!it.kickoff && it.date) {
       const k = coerceKickoffISO(it.date);
       if (k) it.kickoff = k;
+    }
+
+    // ✅ ADD THIS: use AEST formatted display string for UI
+    if (it.kickoff) {
+      it.kickoffText = formatAEST(it.kickoff, { withYear: false }); // "31 Dec, 9:14 am"
+    } else {
+      it.kickoffText = it.date || "";
     }
   }
 
