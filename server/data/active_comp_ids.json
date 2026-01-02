@@ -1,5 +1,5 @@
 {
-  "discoveredAt": "2026-01-01T02:44:33Z",
+  "discoveredAt": "2026-01-02T02:34:13Z",
   "range": "1-150,450,650",
   "skip": [
     72,
@@ -31,6 +31,7 @@
     41,
     45,
     48,
+    49,
     50,
     54,
     62,
@@ -42,6 +43,7 @@
     85,
     87,
     88,
+    92,
     93,
     94,
     95,
@@ -462,12 +464,12 @@
     "49": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 1
     },
     "50": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 2
+      "market_header_tables": 3
     },
     "51": {
       "td_more_market_odds": 0,
@@ -667,7 +669,7 @@
     "92": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 0
+      "market_header_tables": 1
     },
     "93": {
       "td_more_market_odds": 0,
@@ -742,17 +744,17 @@
     "107": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 1
     },
     "109": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 2
     },
     "110": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 3
     },
     "111": {
       "td_more_market_odds": 0,
@@ -767,7 +769,7 @@
     "113": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 3
     },
     "115": {
       "td_more_market_odds": 0,
@@ -837,7 +839,7 @@
     "128": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 1
+      "market_header_tables": 3
     },
     "129": {
       "td_more_market_odds": 0,
@@ -952,7 +954,7 @@
     "450": {
       "td_more_market_odds": 0,
       "a_addSelection": 0,
-      "market_header_tables": 3
+      "market_header_tables": 1
     },
     "650": {
       "td_more_market_odds": 0,
