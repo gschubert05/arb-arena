@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arb Arena — Calculator</title>
+  <meta name="description" content="Manual arbitrage calculator with locks + rounding." />
+
+  <link rel="stylesheet" href="/output.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* page-specific layout (keeps styles.css clean) */
+    .calc-wrap{ max-width: 920px; }
+
+    .calc-head{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .calc-title{
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin: 6px 0 0;
+    }
+    .calc-sub{
+      color: rgba(226,232,240,0.85);
+      margin-top: 8px;
+      line-height: 1.55;
+    }
+
+    .calc-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    @media (max-width: 980px){
+      .calc-grid{ grid-template-columns: 1fr; }
+    }
+
+    .calc-card{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .label{
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: rgba(226,232,240,0.92);
+    }
+
+    .input{
+      width:100%;
+      color: rgba(226,232,240,0.92);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      font-variant-numeric: tabular-nums;
+    }
+    .input:focus{
+      border-color: rgba(59,130,246,0.45);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.20);
+    }
+
+    .lock-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .lock-btn{
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      cursor: pointer;
+      transition: background .15s ease, transform .15s ease;
+      white-space: nowrap;
+    }
+    .lock-btn:hover{ background: rgba(255,255,255,0.10); }
+    .lock-btn:active{ transform: translateY(1px); }
+    .lock-btn.active{
+      background: rgba(37,99,235,0.22);
+      border-color: rgba(59,130,246,0.35);
+    }
+
+    .controls{
+      margin-top: 14px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .controls{ grid-template-columns: 1fr; }
+    }
+    select.input{ cursor:pointer; }
+
+    .summary{
+      margin-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.10);
+      padding-top: 14px;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: .5rem;
+      padding: .45rem .7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(226,232,240,0.92);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .pill b{ font-variant-numeric: tabular-nums; }
+
+    .pill.profit{
+      background: rgba(37, 99, 235, 0.18);
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      color: #eaf1ff;
+    }
+    .pill.profit b{ color:#fff; }
+
+    .tiny{
+      font-size: 12px;
+      color: rgba(148,163,184,0.92);
+      margin-top: 10px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <div class="nav-inner">
+        <a href="/" style="text-decoration:none;">
+          <div class="flex items-center gap-3">
+            <img src="/logo.svg" alt="Arb Arena logo" class="h-12 w-12 rounded-xl shadow-sm" />
+            <div>
+              <h1 class="text-3xl font-extrabold tracking-tight" style="margin:0; font-size: 22px; line-height:1.1;">Arb Arena</h1>
+              <p class="text-sm text-slate-500 dark:text-slate-400" style="margin:4px 0 0; color: rgba(148,163,184,0.95);">
+                Manual arb calculator
+              </p>
+            </div>
+          </div>
+        </a>
+
+        <nav class="nav-links">
+          <a class="nav-link" data-nav="home" href="/">Home</a>
+          <a class="nav-link" data-nav="calculator" href="/calculator">Calculator</a>
+          <a class="nav-link" data-nav="about" href="/about">About</a>
+          <a class="nav-link" data-nav="disclaimer" href="/disclaimer">Disclaimer</a>
+          <a class="nav-link" data-nav="contact" href="/contact">Contact</a>
+          <a class="btn btn-primary" href="/app">Open app</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="wrap wrap-narrow calc-wrap">
+      <div class="calc-head">
+        <div>
+          <div class="calc-title">Arbitrage Calculator</div>
+          <div class="calc-sub">
+            Enter odds + either a total stake (Auto) or lock one side’s stake.
+            The calculated side will be rounded to your chosen step.
+          </div>
+        </div>
+        <div class="pill">Mode: <b id="modeLabel">Auto (Total)</b></div>
+      </div>
+
+      <div class="card">
+        <div class="card-inner">
+          <div class="controls">
+            <div>
+              <div class="label">Mode</div>
+              <select id="mode" class="input">
+                <option value="auto" selected>Auto (Total)</option>
+                <option value="lockA">Lock A</option>
+                <option value="lockB">Lock B</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="label">Rounding</div>
+              <select id="roundStep" class="input">
+                <option value="10" selected>Nearest $10</option>
+                <option value="5">Nearest $5</option>
+                <option value="1">Nearest $1</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="label">Total stake (Auto)</div>
+              <input id="totalStake" class="input" type="number" step="10" min="0" value="1000" inputmode="numeric">
+            </div>
+
+            <div style="display:flex; align-items:flex-end; gap:12px;">
+              <a class="btn btn-ghost" href="/app">Back to app</a>
+              <button id="reset" class="btn btn-primary" type="button">Reset</button>
+            </div>
+          </div>
+
+          <div class="calc-grid">
+            <!-- Side A -->
+            <div class="calc-card">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                <div>
+                  <div style="font-weight:900;">Side A</div>
+                  <div class="tiny" id="payoutA">Payout: —</div>
+                </div>
+                <button id="lockA" class="lock-btn" type="button">Lock A</button>
+              </div>
+
+              <div class="row">
+                <div>
+                  <div class="label">Odds (A)</div>
+                  <input id="oddsA" class="input" type="number" step="0.01" min="1.01" value="1.90" inputmode="decimal">
+                </div>
+                <div>
+                  <div class="label">Stake (A)</div>
+                  <input id="stakeA" class="input" type="number" step="1" min="0" value="0" inputmode="numeric">
+                </div>
+              </div>
+            </div>
+
+            <!-- Side B -->
+            <div class="calc-card">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                <div>
+                  <div style="font-weight:900;">Side B</div>
+                  <div class="tiny" id="payoutB">Payout: —</div>
+                </div>
+                <button id="lockB" class="lock-btn" type="button">Lock B</button>
+              </div>
+
+              <div class="row">
+                <div>
+                  <div class="label">Odds (B)</div>
+                  <input id="oddsB" class="input" type="number" step="0.01" min="1.01" value="1.90" inputmode="decimal">
+                </div>
+                <div>
+                  <div class="label">Stake (B)</div>
+                  <input id="stakeB" class="input" type="number" step="1" min="0" value="0" inputmode="numeric">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="summary">
+            <span class="pill">Total: <b id="outTotal">$0.00</b></span>
+            <span class="pill">Min payout: <b id="outMinPayout">$0.00</b></span>
+            <span class="pill profit">Profit (<span id="outRoi">0.00</span>%): <b id="outProfit">$0.00</b></span>
+          </div>
+
+          <div class="tiny" id="note">
+            Auto mode uses Total stake. Lock mode ignores total and computes the other side.
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap wrap-narrow">
+      <div class="foot">
+        <div>
+          © <span id="y"></span> Arb Arena <span style="opacity:.5;">•</span>
+          Last updated: <span id="lastUpdated"></span> <span style="opacity:.5;">•</span> AEST
+        </div>
+
+        <div class="foot-links">
+          <a href="/">Home</a>
+          <a href="/calculator">Calculator</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/disclaimer">Disclaimer</a>
+          <a href="/app">Open app</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Active nav
+    (function(){
+      const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+      const map = { "/": "home", "/about": "about", "/contact": "contact", "/disclaimer": "disclaimer", "/calculator": "calculator" };
+      const key = map[path];
+      if (key) {
+        const el = document.querySelector(`[data-nav="${key}"]`);
+        if (el) el.classList.add("active");
+      }
+    })();
+
+    // Year + last updated (AEST)
+    document.getElementById("y").textContent = new Date().getFullYear();
+    const lm = new Date(document.lastModified);
+    const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", day:"2-digit", month:"short", year:"numeric" });
+    document.getElementById("lastUpdated").textContent = fmt.format(lm);
+  </script>
+
+  <script src="/calculator.js" defer></script>
+</body>
+</html>

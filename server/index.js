@@ -388,7 +388,7 @@ app.get('/contact', (req, res) => res.sendFile(path.join(WEB_DIR, 'contact.html'
 app.get('/terms', (req, res) => res.sendFile(path.join(WEB_DIR, 'terms.html')));
 app.get('/privacy', (req, res) => res.sendFile(path.join(WEB_DIR, 'privacy.html')));
 app.get('/disclaimer', (req, res) => res.sendFile(path.join(WEB_DIR, 'disclaimer.html')));
-
+app.get('/calculator', (req, res) => res.sendFile(path.join(WEB_DIR, 'calculator.html')));
 
 // --- debug route (where you tested; keep both spellings to be safe) ---
 async function debugLeagues(req, res) {
