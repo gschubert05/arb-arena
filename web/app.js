@@ -150,7 +150,7 @@ const state = {
   page: 1,
   pageSize: 15,
   filters: { dateFrom: '', dateTo: '', minRoi: 0 },
-  tz: localStorage.getItem('tzMode') || 'AEST',
+  tz: normalizeTZ(localStorage.getItem('tzMode') || 'Australia/Brisbane'),
   selectedBookies: new Set(JSON.parse(localStorage.getItem('bookiesSelected') || '[]')),
   selectedSports: new Set(JSON.parse(localStorage.getItem('sportsSelected') || '[]')),
   selectedLeagues: new Set(JSON.parse(localStorage.getItem('leaguesSelected') || '[]')),
@@ -205,6 +205,8 @@ const els = {
 
   tzSelect: document.getElementById('tzSelect'),
 };
+
+initTZSelect();
 
 // --- Utility: Querystring builder (client-only bookie filtering) ---
 function qs() {
@@ -271,17 +273,76 @@ function logoFor(name) {
   return `/images/${slug}.jpeg`;
 }
 
+// --- Timezone options (values are IANA tz IDs; "local" means browser local) ---
+const TZ_OPTIONS = [
+  { value: 'local', label: 'Auto (Local)' },
+
+  // Australia
+  { value: 'Australia/Brisbane',  label: 'Brisbane (QLD) — AEST' },         // no DST
+  { value: 'Australia/Sydney',    label: 'Sydney (NSW/ACT) — AEST/AEDT' },  // DST
+  { value: 'Australia/Melbourne', label: 'Melbourne (VIC) — AEST/AEDT' },   // DST
+  { value: 'Australia/Hobart',    label: 'Hobart (TAS) — AEST/AEDT' },      // DST
+  { value: 'Australia/Adelaide',  label: 'Adelaide (SA) — ACST/ACDT' },     // DST
+  { value: 'Australia/Darwin',    label: 'Darwin (NT) — ACST' },            // no DST
+  { value: 'Australia/Perth',     label: 'Perth (WA) — AWST' },             // no DST
+];
+
+// Back-compat + safety: convert old stored values ("AEST", "Local", etc.) to new scheme
+function normalizeTZ(v) {
+  const s = String(v || '').trim();
+
+  if (!s) return 'Australia/Brisbane';
+  if (/^local$/i.test(s) || /^auto$/i.test(s)) return 'local';
+  if (s === 'AEST') return 'Australia/Brisbane';
+
+  // If it's already an IANA zone like "Australia/Sydney", keep it
+  if (s.includes('/')) return s;
+
+  // Unknown string -> treat as local instead of breaking formatting
+  return 'local';
+}
+
+function getIntlTimeZone() {
+  const v = normalizeTZ(state.tz);
+  return v === 'local' ? undefined : v;
+}
+
+function initTZSelect() {
+  if (!els.tzSelect) return;
+
+  // Build options (shows state next to city)
+  els.tzSelect.innerHTML = TZ_OPTIONS
+    .map(o => `<option value="${o.value}">${o.label}</option>`)
+    .join('');
+
+  // Ensure state.tz is normalized and select shows it
+  state.tz = normalizeTZ(state.tz);
+  els.tzSelect.value = state.tz;
+  localStorage.setItem('tzMode', state.tz);
+}
+
 // --- Date/time formatting ---
 function fmtWithTZ(iso) {
   if (!iso) return '';
   const opts = { dateStyle: 'medium', timeStyle: 'short' };
-  let tz = undefined;
-  if (state.tz === 'AEST') tz = 'Australia/Brisbane';
-  const fmt = new Intl.DateTimeFormat('en-AU', tz ? { ...opts, timeZone: tz } : opts);
+  const timeZone = getIntlTimeZone();
+  const fmt = new Intl.DateTimeFormat('en-AU', timeZone ? { ...opts, timeZone } : opts);
   try {
     return fmt.format(new Date(iso));
   } catch {
     return iso;
+  }
+}
+
+// time-only helper for Updated column
+function fmtTimeWithTZ(iso) {
+  if (!iso) return '';
+  const timeZone = getIntlTimeZone();
+  const fmt = new Intl.DateTimeFormat('en-AU', timeZone ? { hour: '2-digit', minute: '2-digit', hour12: false, timeZone } : { hour: '2-digit', minute: '2-digit', hour12: false });
+  try {
+    return fmt.format(new Date(iso));
+  } catch {
+    return '';
   }
 }
 
@@ -1543,7 +1604,7 @@ for (const th of document.querySelectorAll('thead [data-sort]')) {
 
 // timezone select
 els.tzSelect?.addEventListener('change', () => {
-  state.tz = els.tzSelect.value;
+  state.tz = normalizeTZ(els.tzSelect.value);
   localStorage.setItem('tzMode', state.tz);
   fetchData();
 });
