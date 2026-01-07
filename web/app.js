@@ -206,8 +206,6 @@ const els = {
   tzSelect: document.getElementById('tzSelect'),
 };
 
-initTZSelect();
-
 // --- Utility: Querystring builder (client-only bookie filtering) ---
 function qs() {
   const params = {
@@ -1608,6 +1606,9 @@ els.tzSelect?.addEventListener('change', () => {
   localStorage.setItem('tzMode', state.tz);
   fetchData();
 });
+
+// init timezone dropdown AFTER TZ_OPTIONS is declared
+initTZSelect();
 
 // init
 fetchData();
