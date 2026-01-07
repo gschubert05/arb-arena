@@ -178,6 +178,84 @@ function getAestYearMonth() {
   };
 }
 
+function isLiveishDate(dstr) {
+  if (typeof dstr !== 'string') return false;
+  const s = dstr.toLowerCase();
+  // website uses these when game is about to start / underway
+  return /\bto go\b/.test(s) || /\bago\b/.test(s);
+}
+
+function requiredLeftOdds(bestRight) {
+  const br = Number(bestRight);
+  if (!(br > 1)) return Infinity;
+  return 1 / (1 - 1 / br);
+}
+function requiredRightOdds(bestLeft) {
+  const bl = Number(bestLeft);
+  if (!(bl > 1)) return Infinity;
+  return 1 / (1 - 1 / bl);
+}
+
+function shouldDropBet365Glitch(it) {
+  const rows = it?.book_table?.rows || [];
+  if (!rows.length) return false;
+
+  const bestLAgency = cleanAgency(it?.book_table?.best?.left?.agency || '').toLowerCase();
+  const bestRAgency = cleanAgency(it?.book_table?.best?.right?.agency || '').toLowerCase();
+
+  // Only care when bet365 is actually the best on a side
+  const betIsBestLeft  = bestLAgency === 'bet365';
+  const betIsBestRight = bestRAgency === 'bet365';
+  if (!betIsBestLeft && !betIsBestRight) return false;
+
+  // Count unique agencies in table
+  const agencies = rows
+    .map(r => cleanAgency(r?.agency || '').toLowerCase())
+    .filter(Boolean);
+  const uniq = new Set(agencies);
+  const n = uniq.size;
+
+  // Your explicit rule: if only 2 bookies showing odds, ignore it
+  if (n <= 2) return true;
+
+  const bestLeftOdds  = Number(it?.book_table?.best?.left?.odds);
+  const bestRightOdds = Number(it?.book_table?.best?.right?.odds);
+  if (!(bestLeftOdds > 1 && bestRightOdds > 1)) return false;
+
+  const needL = requiredLeftOdds(bestRightOdds);
+  const needR = requiredRightOdds(bestLeftOdds);
+
+  const leftProfitable  = new Set();
+  const rightProfitable = new Set();
+
+  for (const r of rows) {
+    const a = cleanAgency(r?.agency || '').toLowerCase();
+    if (!a) continue;
+
+    const lo = Number(r?.left);
+    const ro = Number(r?.right);
+
+    if (lo >= needL) leftProfitable.add(a);
+    if (ro >= needR) rightProfitable.add(a);
+  }
+
+  const halfOrMore = Math.ceil(n / 2);
+
+  // If bet365 is the ONLY profitable bookie on its side,
+  // and half+ of bookies are profitable on the other side, drop it.
+  if (betIsBestLeft) {
+    const onlyBet365OnLeft = leftProfitable.size === 1 && leftProfitable.has('bet365');
+    if (onlyBet365OnLeft && rightProfitable.size >= halfOrMore) return true;
+  }
+
+  if (betIsBestRight) {
+    const onlyBet365OnRight = rightProfitable.size === 1 && rightProfitable.has('bet365');
+    if (onlyBet365OnRight && leftProfitable.size >= halfOrMore) return true;
+  }
+
+  return false;
+}
+
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
 function coerceISO(dstr) {
   if (typeof dstr !== 'string') return null;
@@ -419,6 +497,12 @@ app.get('/api/opportunities', async (req, res) => {
     const bestR = clean(it.book_table?.best?.right?.agency || '');
     const anyBookmaker = bestL === 'bookmaker' || bestR === 'bookmaker' || rows.some(r => clean(r?.agency) === 'bookmaker');
     if (anyBookmaker) return false;
+
+    // drop "to go" / "ago" timestamps (in-play / near start)
+    if (isLiveishDate(it.date)) return false;
+
+    // drop suspected bet365 glitch arbs
+    if (shouldDropBet365Glitch(it)) return false;
 
     const L = it.book_table?.best?.left?.odds;
     const R = it.book_table?.best?.right?.odds;
