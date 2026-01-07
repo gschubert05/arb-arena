@@ -8,7 +8,6 @@
     stakeB: $('stakeB'),
     totalStake: $('totalStake'),
     roundStep: $('roundStep'),
-    mode: $('mode'),
     modeLabel: $('modeLabel'),
     lockA: $('lockA'),
     lockB: $('lockB'),
@@ -22,6 +21,9 @@
     note: $('note'),
   };
 
+  // mode: 'auto' | 'lockA' | 'lockB'
+  let mode = 'lockB';
+
   // Persist settings
   const savedRound = localStorage.getItem('calcRoundStep');
   if (savedRound && ['1','5','10'].includes(savedRound)) els.roundStep.value = savedRound;
@@ -30,7 +32,7 @@
   if (savedTotal && !Number.isNaN(Number(savedTotal))) els.totalStake.value = String(savedTotal);
 
   const savedMode = localStorage.getItem('calcMode');
-  if (savedMode && ['auto','lockA','lockB'].includes(savedMode)) els.mode.value = savedMode;
+  if (savedMode && ['auto','lockA','lockB'].includes(savedMode)) mode = savedMode;
 
   function clampPos(n){ n = Number(n) || 0; return n < 0 ? 0 : n; }
   const fmtMoney = (v) => '$' + (Number(v) || 0).toFixed(2);
@@ -96,6 +98,7 @@
     let best = null;
     for (let k = -6; k <= 6; k++) {
       const other = Math.max(0, base + k * step);
+
       const payoutLocked = locked * oLocked;
       const payoutOther = other * oOther;
       const total = locked + other;
@@ -104,28 +107,32 @@
       const diff = Math.abs(payoutLocked - payoutOther);
       const roiPct = total > 0 ? (profit / total) * 100 : 0;
 
-      // prefer profit desc, then diff asc
       const key = profit * 1e9 - diff;
       if (!best || key > best.key) best = { key, other, sc: { payoutLocked, payoutOther, total, minPayout, profit, diff, roiPct } };
     }
     return best || { other: 0, sc: { payoutLocked: 0, payoutOther: 0, total: 0, minPayout: 0, profit: 0, diff: 0, roiPct: 0 } };
   }
 
-  function setMode(mode) {
-    els.mode.value = mode;
+  function setMode(next) {
+    mode = next;
     localStorage.setItem('calcMode', mode);
 
     els.lockA.classList.toggle('active', mode === 'lockA');
     els.lockB.classList.toggle('active', mode === 'lockB');
 
     els.modeLabel.textContent =
-      mode === 'auto'  ? 'Auto (Total)' :
+      mode === 'auto'  ? 'Auto' :
       mode === 'lockA' ? 'Lock A' :
-      mode === 'lockB' ? 'Lock B' : 'Auto (Total)';
+      mode === 'lockB' ? 'Lock B' : 'Auto';
+
+    // Disable total stake outside auto (matches expectations)
+    const auto = (mode === 'auto');
+    els.totalStake.disabled = !auto;
+    els.totalStake.classList.toggle('disabled', !auto);
 
     els.note.textContent =
       mode === 'auto'
-        ? 'Auto mode: uses Total stake and rounds the split.'
+        ? 'Auto: type Total stake — stakes are calculated (rounded).'
         : mode === 'lockA'
           ? 'Lock A: type Stake (A) — Stake (B) follows (rounded).'
           : 'Lock B: type Stake (B) — Stake (A) follows (rounded).';
@@ -143,7 +150,6 @@
   function recalc() {
     const { oA, oB, ok } = readOdds();
     const step = Number(els.roundStep.value) || 10;
-    const mode = els.mode.value || 'auto';
 
     if (!ok) {
       render(score(oA || 0, oB || 0, 0, 0));
@@ -171,46 +177,44 @@
       return;
     }
 
-    if (mode === 'lockB') {
-      const locked = Number(els.stakeB.value) || 0;
-      const best = computeLocked(oB, oA, locked, step);
-      els.stakeA.value = String(best.other);
+    // lockB
+    const locked = Number(els.stakeB.value) || 0;
+    const best = computeLocked(oB, oA, locked, step);
+    els.stakeA.value = String(best.other);
 
-      const sc = score(oA, oB, clampPos(best.other), clampPos(locked));
-      render(sc);
-      return;
-    }
+    const sc = score(oA, oB, clampPos(best.other), clampPos(locked));
+    render(sc);
   }
 
   // Events
   els.oddsA.addEventListener('input', recalc);
   els.oddsB.addEventListener('input', recalc);
 
-  els.totalStake.addEventListener('input', () => { if (els.mode.value === 'auto') recalc(); });
+  // Typing total stake switches to auto
+  els.totalStake.addEventListener('input', () => {
+    if (mode !== 'auto') setMode('auto');
+    recalc();
+  });
 
   els.roundStep.addEventListener('change', () => {
     localStorage.setItem('calcRoundStep', String(els.roundStep.value || '10'));
     recalc();
   });
 
-  els.mode.addEventListener('change', () => {
-    setMode(els.mode.value);
-    recalc();
-  });
-
+  // Lock button toggles (click active lock again -> auto)
   els.lockA.addEventListener('click', () => {
-    setMode(els.mode.value === 'lockA' ? 'auto' : 'lockA');
+    setMode(mode === 'lockA' ? 'auto' : 'lockA');
     recalc();
   });
 
   els.lockB.addEventListener('click', () => {
-    setMode(els.mode.value === 'lockB' ? 'auto' : 'lockB');
+    setMode(mode === 'lockB' ? 'auto' : 'lockB');
     recalc();
   });
 
   // Typing a stake switches to that lock mode automatically
-  els.stakeA.addEventListener('input', () => { if (els.mode.value !== 'lockA') setMode('lockA'); recalc(); });
-  els.stakeB.addEventListener('input', () => { if (els.mode.value !== 'lockB') setMode('lockB'); recalc(); });
+  els.stakeA.addEventListener('input', () => { if (mode !== 'lockA') setMode('lockA'); recalc(); });
+  els.stakeB.addEventListener('input', () => { if (mode !== 'lockB') setMode('lockB'); recalc(); });
 
   els.reset.addEventListener('click', () => {
     els.oddsA.value = '1.90';
@@ -219,11 +223,11 @@
     els.stakeB.value = '0';
     els.totalStake.value = '1000';
     els.roundStep.value = '10';
-    setMode('auto');
+    setMode('lockB'); // matches your screenshot / preference
     recalc();
   });
 
   // Init
-  setMode(els.mode.value || 'auto');
+  setMode(mode);
   recalc();
 })();
