@@ -277,7 +277,8 @@ const TZ_OPTIONS = [
 
   // Australia
   { value: 'Australia/Brisbane',  label: 'Brisbane (QLD) — AEST' },         // no DST
-  { value: 'Australia/Sydney',    label: 'Sydney (NSW/ACT) — AEST/AEDT' },  // DST
+  { value: 'Australia/Sydney',    label: 'Sydney (NSW) — AEST/AEDT' },      // DST
+  { value: 'Australia/Canberra',  label: 'Canberra (ACT) — AEST/AEDT' },    // DST
   { value: 'Australia/Melbourne', label: 'Melbourne (VIC) — AEST/AEDT' },   // DST
   { value: 'Australia/Hobart',    label: 'Hobart (TAS) — AEST/AEDT' },      // DST
   { value: 'Australia/Adelaide',  label: 'Adelaide (SA) — ACST/ACDT' },     // DST

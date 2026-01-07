@@ -103,12 +103,14 @@
     }
 
     .input{
+      height:48px;
       width:100%;
+      line-height: 1.2;
       color: rgba(226,232,240,0.92);
       background: rgba(255,255,255,0.06);
       border: 1px solid rgba(255,255,255,0.14);
       border-radius: 12px;
-      padding: 12px 12px;
+      padding: 10px 12px;
       outline: none;
       font-variant-numeric: tabular-nums;
       font-size: 18px; /* bigger input text */
@@ -117,7 +119,11 @@
       border-color: rgba(59,130,246,0.45);
       box-shadow: 0 0 0 3px rgba(37,99,235,0.20);
     }
-    select.input{ cursor:pointer; }
+    select.input{ 
+      cursor:pointer; 
+      height: 48px;
+      padding: 10px 42px 10px 12px;
+    }
 
     /* FIX #1: native dropdown list is white -> make option text black */
     select.input option{
@@ -141,8 +147,8 @@
     .payout{
       margin-top: 6px;
       font-size: 16px; /* bigger payout */
-      font-weight: 900;
-      color: rgba(226,232,240,0.92);
+      font-weight: 600;
+      color: rgba(148,163,184,0.92);
     }
 
     .lock-btn{

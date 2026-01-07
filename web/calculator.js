@@ -219,12 +219,15 @@
   els.reset.addEventListener('click', () => {
     els.oddsA.value = '1.90';
     els.oddsB.value = '1.90';
-    els.stakeA.value = '0';
-    els.stakeB.value = '0';
     els.totalStake.value = '1000';
     els.roundStep.value = '10';
-    setMode('lockB'); // matches your screenshot / preference
-    recalc();
+
+    // reset stakes but Auto will overwrite them anyway
+    els.stakeA.value = '0';
+    els.stakeB.value = '0';
+
+    setMode('auto');   // <-- key change
+    recalc();          // <-- will set stakes to 500/500 for equal odds
   });
 
   // Init
