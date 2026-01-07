@@ -31,6 +31,8 @@ def _is_bad_baseball_half_total(txt: str) -> bool:
     s = re.sub(r'\s+', ' ', txt or '').lower().replace('−', '-')
     return bool(_RE_OVER_05.search(s) and _RE_UNDER_05.search(s))
 
+def _epoch_ms_to_iso(ms: int) -> str:
+    return dt.datetime.fromtimestamp(ms / 1000, tz=dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 def parse_comp_ids(env_val: Optional[str]) -> List[int]:
     """
@@ -422,18 +424,43 @@ def _scrape_betting_table_for_search(driver: webdriver.Chrome, url: str, search_
             right_txt= safe(r_idx)
 
             updated = ""
+            updated_ms = None
+            updated_iso = ""
+
             if u_idx is not None and 0 <= u_idx < n:
                 td_u = tds[u_idx]
-                direct_texts = [
-                    s.strip()
-                    for s in td_u.find_all(string=True, recursive=False)
-                    if isinstance(s, NavigableString) and s.strip()
-                ]
-                candidate = direct_texts[-1] if direct_texts else ""
-                m = re.search(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", candidate)
-                updated = m.group(1) if m else candidate
 
-            return {"agency": agency, "left": left_txt, "right": right_txt, "updated": updated if u_idx is not None else ""}
+                # ✅ 1) Prefer grabbing the epoch from the script: write_local_time(1767...)
+                script = td_u.find("script")
+                if script:
+                    script_txt = script.get_text(" ", strip=True) or ""
+                    m = re.search(r"write_local_time\((\d{10,13})\)", script_txt)
+                    if m:
+                        updated_ms = int(m.group(1))
+                        updated_iso = _epoch_ms_to_iso(updated_ms)
+
+                # ✅ 2) Fallback to your previous "direct text node" approach
+                if not updated_iso:
+                    direct_texts = [
+                        s.strip()
+                        for s in td_u.find_all(string=True, recursive=False)
+                        if isinstance(s, NavigableString) and s.strip()
+                    ]
+                    candidate = direct_texts[-1] if direct_texts else ""
+                    m = re.search(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", candidate)
+                    updated = m.group(1) if m else candidate
+                else:
+                    # keep a simple display string too (optional)
+                    updated = dt.datetime.fromtimestamp(updated_ms/1000, tz=dt.timezone.utc).strftime("%H:%M")
+
+            return {
+                "agency": agency,
+                "left": left_txt,
+                "right": right_txt,
+                "updated": updated if u_idx is not None else "",
+                "updatedMs": updated_ms,
+                "updatedISO": updated_iso
+            }
 
         tr = first_data_tr
         default_map = (row_agency_idx, row_left_idx, row_right_idx, row_updated_idx)

@@ -285,6 +285,32 @@ function fmtWithTZ(iso) {
   }
 }
 
+function formatUpdated(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+
+  // Your selector currently uses "Local" and "AEST" (guessing from your note)
+  // If you later expand to more zones, set state.tz to an IANA zone string.
+  let timeZone;
+  if (state.tz && state.tz !== 'Local') {
+    // If you store "AEST" as the value, map it:
+    timeZone = (state.tz === 'AEST') ? 'Australia/Brisbane' : state.tz;
+  }
+
+  try {
+    return new Intl.DateTimeFormat('en-AU', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      ...(timeZone ? { timeZone } : {})
+    }).format(d);
+  } catch {
+    return '';
+  }
+}
+
+
 // --- ROI & pairing helpers ---
 function roiFromOdds(a, b) {
   const edge = 1 / a + 1 / b;
@@ -323,7 +349,9 @@ function renderFullBookTable(it) {
           <img src="${logoFor(agency)}" class="w-5 h-5 rounded" onerror="this.src='/logos/placeholder.jpeg'"><span>${agency}</span></div></td>
         <td class="px-3 py-2 text-right">${mark(r.left, isBestL)}</td>
         <td class="px-3 py-2 text-right">${mark(r.right, isBestR)}</td>
-        <td class="px-3 py-2 text-right text-slate-500 dark:text-slate-400">${r.updated || ''}</td>
+        <td class="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+          ${r.updatedISO ? formatUpdated(r.updatedISO) : (r.updated || '')}
+        </td>
       </tr>`;
     })
     .join('');
